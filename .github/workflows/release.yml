@@ -79,7 +79,25 @@ jobs:
           if command -v docker >/dev/null 2>&1; then docker version; fi
 
       - name: Build and validate micro.sfx
-        run: bash scripts/build-micro-sfx.sh "${PHPSFX_PLATFORM}"
+        run: |
+          set +e
+          bash scripts/build-micro-sfx.sh "${PHPSFX_PLATFORM}" 2>&1 | tee "build-${PHPSFX_PLATFORM}.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "${status}" -ne 0 ]; then
+            tail_text=$(tail -120 "build-${PHPSFX_PLATFORM}.log" | tr '\n' '|' | sed -e 's/%/%25/g')
+            echo "::error title=Build failed ${PHPSFX_PLATFORM}::${tail_text}"
+            exit "${status}"
+          fi
+
+      - name: Upload failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.platform }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: build-${{ matrix.platform }}.log
 
       - name: Upload platform artifact
         uses: actions/upload-artifact@v4
