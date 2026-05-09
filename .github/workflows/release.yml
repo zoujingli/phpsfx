@@ -85,7 +85,7 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           if [ "${status}" -ne 0 ]; then
-            tail_text=$(tail -120 "build-${PHPSFX_PLATFORM}.log" | tr '\n' '|' | sed -e 's/%/%25/g')
+            tail_text=$(tail -60 "build-${PHPSFX_PLATFORM}.log" | tr '\n' '|' | sed -e 's/%/%25/g')
             echo "::error title=Build failed ${PHPSFX_PLATFORM}::${tail_text}"
             exit "${status}"
           fi

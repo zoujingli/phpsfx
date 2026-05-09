@@ -97,7 +97,7 @@ else
 fi
 SPC_COMMIT=$(git rev-parse HEAD)
 
-composer install --no-interaction --no-progress --prefer-dist
+composer install --no-dev --classmap-authoritative --no-interaction --no-progress --prefer-dist
 rm -rf buildroot
 
 case "${PLATFORM}" in
