@@ -91,6 +91,10 @@ jobs:
             exit "${status}"
           fi
 
+      - name: Test PHP and Phar packaging
+        run: |
+          bash scripts/test-packaging.sh "dist/${PHPSFX_PLATFORM}/micro.sfx-php${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}"
+
       - name: Upload failure log
         if: failure()
         uses: actions/upload-artifact@v4

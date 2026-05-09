@@ -55,7 +55,7 @@ cd /mnt/d/WebRoot/phpsfx
 PHPSFX_PLATFORM=linux-x64 \
 PHPSFX_PHP_VERSION=8.4 \
 PHPSFX_SPC_REF=main \
-  scripts/build-micro-sfx.sh
+  bash scripts/build-micro-sfx.sh
 ```
 
 构建完成后输出到 `dist/`。
@@ -75,20 +75,93 @@ PHPSFX_SPC_REF=main \
 ```bash
 PHPSFX_EXPECTED_PHP_PREFIX=8.4. \
 PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib \
-  scripts/validate-micro-sfx.sh dist/micro.sfx-php8.4-linux-x64
+  bash scripts/validate-micro-sfx.sh dist/micro.sfx-php8.4-linux-x64
 ```
 
-## 下游使用示例
+## PHP 源码打包
 
-`micro.sfx` 本身不能直接执行 PHP 命令，需要追加 PHP 代码后再运行：
+单个 PHP 入口文件可以直接追加到 `micro.sfx`。推荐直接使用 phpsfx 最新 Release 产物：
 
 ```bash
-cat micro.sfx-php8.4-linux-x64 index.php > app
-chmod +x app
-./app
+bash scripts/download-release-asset.sh linux-x64 latest /tmp/micro.sfx
+
+bash scripts/pack-php.sh \
+  /tmp/micro.sfx \
+  examples/hello.php \
+  build/hello
+
+./build/hello
 ```
 
-如果下游输入是 Phar，建议使用 static-php-cli 的 `micro:combine` 做合并，INI 注入和资源嵌入也由下游项目自行处理。
+等价原理：
+
+```bash
+cat micro.sfx-php8.4-linux-x64 examples/hello.php > build/hello
+chmod +x build/hello
+```
+
+该模式适合单文件命令行工具或入口文件已经自包含的场景；复杂项目不要直接追加源码目录。
+
+## Phar 打包
+
+复杂项目推荐先生成可执行 Phar，再追加到 `micro.sfx`。推荐直接使用 phpsfx 最新 Release 产物：
+
+```bash
+bash scripts/download-release-asset.sh linux-x64 latest /tmp/micro.sfx
+
+bash scripts/pack-phar.sh \
+  /tmp/micro.sfx \
+  app.phar \
+  build/app
+
+./build/app
+```
+
+等价原理：
+
+```bash
+cat micro.sfx-php8.4-linux-x64 app.phar > build/app
+chmod +x build/app
+```
+
+约束：
+
+- `app.phar` 必须自带可执行 Phar stub。
+- 运行时读取外部配置、日志、上传目录、数据库快照等资源时，仍应按应用自己的 Phar 运行规则放在二进制同级或指定路径。
+- HyperfAdmin 的 `xadmin:build:phar --name=system.bin` 生成物可直接作为 `pack-phar.sh` 输入；脚本会兼容 `.bin` 这类自定义 Phar 后缀。
+
+## 打包实现自测
+
+对已有 `micro.sfx` 同时测试 PHP 与 Phar 两种打包方式：
+
+```bash
+bash scripts/test-packaging.sh micro.sfx-php8.4-linux-x64
+```
+
+## HyperfAdmin 打包示例
+
+```bash
+# 1. 在 HyperfAdmin 中生成 Phar。
+cd /mnt/d/WebRoot/HyperfAdmin
+APP_ENV=prod SCAN_CACHEABLE=true \
+  sh bin/swoole-cli -d phar.readonly=Off ./bin/hyperf.php \
+  xadmin:build:phar --mount=.env --name=system.bin --phar-version=2.0.0
+
+# 2. 下载 phpsfx 最新 Release 中对应平台的 micro.sfx。
+cd /mnt/d/WebRoot/phpsfx
+bash scripts/download-release-asset.sh linux-x64 latest /tmp/micro.sfx
+
+# 3. 追加 HyperfAdmin Phar 生成单文件二进制。
+bash scripts/pack-phar.sh \
+  /tmp/micro.sfx \
+  /mnt/d/WebRoot/HyperfAdmin/system.bin \
+  /mnt/d/WebRoot/HyperfAdmin/build/hyperf-admin-micro-linux-x64
+
+# 4. 运行命令。HyperfAdmin 当前 Phar stub 可直接透传命令参数。
+cd /mnt/d/WebRoot/HyperfAdmin
+./build/hyperf-admin-micro-linux-x64 list
+./build/hyperf-admin-micro-linux-x64 start
+```
 
 ## 参考
 
