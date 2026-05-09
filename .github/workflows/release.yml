@@ -79,7 +79,7 @@ jobs:
           if command -v docker >/dev/null 2>&1; then docker version; fi
 
       - name: Build and validate micro.sfx
-        run: scripts/build-micro-sfx.sh "${PHPSFX_PLATFORM}"
+        run: bash scripts/build-micro-sfx.sh "${PHPSFX_PLATFORM}"
 
       - name: Upload platform artifact
         uses: actions/upload-artifact@v4

@@ -126,7 +126,7 @@ chmod +x "${DIST_DIR}/${ASSET_NAME}"
 
 PHPSFX_EXPECTED_PHP_PREFIX="${PHP_VERSION}." \
 PHPSFX_REQUIRED_EXTENSIONS="${EXPECTED_EXTENSIONS}" \
-  "${ROOT_DIR}/scripts/validate-micro-sfx.sh" "${DIST_DIR}/${ASSET_NAME}"
+  bash "${ROOT_DIR}/scripts/validate-micro-sfx.sh" "${DIST_DIR}/${ASSET_NAME}"
 
 SHA256=$(sha256_file "${DIST_DIR}/${ASSET_NAME}")
 BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
