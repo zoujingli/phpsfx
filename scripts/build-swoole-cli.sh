@@ -56,6 +56,8 @@ Important environment variables:
   PHPSFX_CURL_SLIM_LIBRARY           Set to 1 to trim optional libcurl features, default from profile: 1
   PHPSFX_LIBZIP_SLIM_LIBRARY         Set to 1 to trim optional libzip codecs, default from profile: 1
   PHPSFX_ZLIB_SLIM_LIBRARY           Set to 1 to remove unrelated zlib library deps, default from profile: 1
+  PHPSFX_REDIS_DISABLE_SESSION       Set to 1 to build redis without session hooks, default from profile: 1
+  PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
   PHPSFX_DOWNLOAD_MIRROR_URL         Optional Swoole CLI dependency mirror URL passed to prepare.php
   PHPSFX_DIST_DIR                    Output directory, default: ./dist
@@ -234,7 +236,7 @@ prime_swoole_extension_archive() {
 }
 
 apply_profile_patches() {
-  local enabled_file swoole_file curl_file libzip_file zlib_file ext
+  local enabled_file swoole_file curl_file libzip_file zlib_file redis_file oniguruma_file ext
 
   # Swoole CLI 上游默认启用 full profile；这里将默认启用列表改为 profile 明确声明的最小集合，
   # 防止 prepare.php 在解析依赖时下载 sqlite/intl/gd/imagick/mongodb 等未使用组件。
@@ -457,6 +459,58 @@ return function (Preprocessor $p) {
 PHP
     echo "Applied slim zlib library profile" >&2
   fi
+
+  if [[ "${PHPSFX_REDIS_DISABLE_SESSION:-0}" == "1" ]]; then
+    redis_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/redis.php"
+    cat > "${redis_file}" <<'PHP'
+<?php
+
+use SwooleCli\Extension;
+use SwooleCli\Preprocessor;
+
+return function (Preprocessor $p) {
+    $p->addExtension(
+        (new Extension('redis'))
+            ->withOptions('--enable-redis --disable-redis-session')
+            ->withPeclVersion('6.2.0')
+            ->withFileHash('md5', 'b713b42a7ad2eb6638de739fffd62c3a')
+            ->withHomePage('https://github.com/phpredis/phpredis')
+            ->withLicense('https://github.com/phpredis/phpredis/blob/develop/COPYING', Extension::LICENSE_PHP)
+    );
+};
+PHP
+    echo "Applied redis without session profile" >&2
+  fi
+
+  if [[ "${PHPSFX_ONIGURUMA_CLANG_COMPAT:-0}" == "1" ]]; then
+    oniguruma_file="${SWOOLE_CLI_DIR}/sapi/src/builder/library/oniguruma.php"
+    cat > "${oniguruma_file}" <<'PHP'
+<?php
+
+use SwooleCli\Library;
+use SwooleCli\Preprocessor;
+
+return function (Preprocessor $p) {
+    $oniguruma_prefix = ONIGURUMA_PREFIX;
+    $cflags = $p->isMacos() ? 'CFLAGS="$CFLAGS -Wno-error=incompatible-function-pointer-types" ' : '';
+    $p->addLibrary(
+        (new Library('oniguruma'))
+            ->withHomePage('https://github.com/kkos/oniguruma.git')
+            ->withUrl('https://github.com/kkos/oniguruma/archive/refs/tags/v6.9.9.tar.gz')
+            ->withFile('oniguruma-v6.9.9.tar.gz')
+            ->withFileHash('md5', '6a3defb3d5e57c2fa4b6f3b4ec6de28b')
+            ->withPrefix($oniguruma_prefix)
+            ->withConfigure(
+                './autogen.sh && ' . $cflags . './configure --prefix=' . $oniguruma_prefix . ' --enable-static --disable-shared'
+            )
+            ->withLicense('https://github.com/kkos/oniguruma/blob/master/COPYING', Library::LICENSE_SPEC)
+            ->withPkgName('oniguruma')
+            ->withBinPath($oniguruma_prefix . '/bin/')
+    );
+};
+PHP
+    echo "Applied oniguruma clang compatibility profile" >&2
+  fi
 }
 
 if [[ -z "${PLATFORM}" ]]; then
@@ -537,6 +591,8 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
   "curl_slim_library": "${PHPSFX_CURL_SLIM_LIBRARY:-0}",
   "libzip_slim_library": "${PHPSFX_LIBZIP_SLIM_LIBRARY:-0}",
   "zlib_slim_library": "${PHPSFX_ZLIB_SLIM_LIBRARY:-0}",
+  "redis_disable_session": "${PHPSFX_REDIS_DISABLE_SESSION:-0}",
+  "oniguruma_clang_compat": "${PHPSFX_ONIGURUMA_CLANG_COMPAT:-0}",
   "swoole_cli_repo": "${SWOOLE_CLI_REPO}",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
   "swoole_cli_commit": "${SWOOLE_CLI_COMMIT}",
