@@ -1,4 +1,4 @@
-name: Release micro.sfx
+name: Release swoole-cli
 
 on:
   push:
@@ -16,10 +16,15 @@ on:
         required: true
         default: '8.4'
         type: string
-      spc_ref:
-        description: 'static-php-cli branch, tag, or commit'
+      swoole_cli_ref:
+        description: 'swoole-cli branch, tag, or commit'
         required: true
-        default: 'main'
+        default: 'v6.2.0.0'
+        type: string
+      prepare_flags:
+        description: 'Optional prepare.php flags. Leave empty to use repository defaults.'
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -31,14 +36,14 @@ concurrency:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  PHPSFX_EXTENSIONS: bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,openssl,pcntl,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zlib
-  PHPSFX_REQUIRED_EXTENSIONS: swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib
+  PHPSFX_EXTENSIONS: bcmath,ctype,curl,dom,fileinfo,filter,iconv,intl,mbstring,openssl,pcntl,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib,opcache
+  PHPSFX_REQUIRED_EXTENSIONS: swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,intl,zip,dom,simplexml,xmlreader,xmlwriter
 
 jobs:
   build:
     name: Build ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 240
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
@@ -55,12 +60,29 @@ jobs:
     env:
       PHPSFX_PLATFORM: ${{ matrix.platform }}
       PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.4' }}
-      PHPSFX_SPC_REF: ${{ github.event.inputs.spc_ref || 'main' }}
+      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.0.0' }}
       PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/${{ matrix.platform }}
 
     steps:
       - name: Checkout phpsfx
         uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake autopoint bison bzip2 ca-certificates clang clang-tools cmake coreutils curl diffutils \
+            flex g++ gcc gettext git libtool libtool-bin lld locales lzip make meson musl-tools nasm netcat-openbsd \
+            ninja-build p7zip-full pkg-config python3 python3-pip re2c tar unzip wget xz-utils yasm zip
+
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          set -eux
+          brew update
+          brew install autoconf automake bison cmake coreutils flex gettext libtool meson nasm ninja pkg-config re2c xz yasm || true
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -68,8 +90,8 @@ jobs:
           php-version: ${{ github.event.inputs.php_version || '8.4' }}
           tools: composer:v2
           coverage: none
-          extensions: curl, openssl, mbstring
-          ini-values: memory_limit=-1
+          extensions: curl, openssl, mbstring, phar
+          ini-values: memory_limit=-1, phar.readonly=0
 
       - name: Show environment
         run: |
@@ -77,23 +99,30 @@ jobs:
           uname -a
           php -v
           composer --version
-          if command -v docker >/dev/null 2>&1; then docker version; fi
+          git --version
+          make --version | head -1
 
-      - name: Build and validate micro.sfx
+      - name: Build and validate swoole-cli
+        env:
+          PHPSFX_SWOOLE_CLI_PREPARE_FLAGS: ${{ github.event.inputs.prepare_flags }}
         run: |
+          set -euo pipefail
+          if [ -z "${PHPSFX_SWOOLE_CLI_PREPARE_FLAGS:-}" ]; then
+            unset PHPSFX_SWOOLE_CLI_PREPARE_FLAGS
+          fi
           set +e
-          bash scripts/build-micro-sfx.sh "${PHPSFX_PLATFORM}" 2>&1 | tee "build-${PHPSFX_PLATFORM}.log"
+          bash scripts/build-swoole-cli.sh "${PHPSFX_PLATFORM}" 2>&1 | tee "build-${PHPSFX_PLATFORM}.log"
           status=${PIPESTATUS[0]}
           set -e
           if [ "${status}" -ne 0 ]; then
-            tail_text=$(tail -60 "build-${PHPSFX_PLATFORM}.log" | tr '\n' '|' | sed -e 's/%/%25/g')
+            tail_text=$(tail -80 "build-${PHPSFX_PLATFORM}.log" | tr '\n' '|' | sed -e 's/%/%25/g')
             echo "::error title=Build failed ${PHPSFX_PLATFORM}::${tail_text}"
             exit "${status}"
           fi
 
-      - name: Test PHP and Phar packaging
+      - name: Test PHP and Phar SFX packaging
         run: |
-          bash scripts/test-packaging.sh "dist/${PHPSFX_PLATFORM}/micro.sfx-php${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}"
+          bash scripts/test-packaging.sh "dist/${PHPSFX_PLATFORM}/swoole-cli-php${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}"
 
       - name: Upload failure log
         if: failure()
@@ -107,11 +136,11 @@ jobs:
       - name: Upload platform artifact
         uses: actions/upload-artifact@v4
         with:
-          name: micro-sfx-${{ matrix.platform }}
+          name: swoole-cli-${{ matrix.platform }}
           retention-days: 30
           if-no-files-found: error
           path: |
-            dist/${{ matrix.platform }}/micro.sfx-php${{ env.PHPSFX_PHP_VERSION }}-${{ matrix.platform }}
+            dist/${{ matrix.platform }}/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-${{ matrix.platform }}
             dist/${{ matrix.platform }}/build-meta-${{ matrix.platform }}.json
 
   release:
@@ -121,7 +150,8 @@ jobs:
     env:
       PHPSFX_RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
       PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.4' }}
-      PHPSFX_SPC_REF: ${{ github.event.inputs.spc_ref || 'main' }}
+      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.0.0' }}
+      PHPSFX_SWOOLE_CLI_PREPARE_FLAGS: ${{ github.event.inputs.prepare_flags }}
     steps:
       - name: Checkout phpsfx
         uses: actions/checkout@v4
@@ -129,7 +159,7 @@ jobs:
       - name: Download platform artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: micro-sfx-*
+          pattern: swoole-cli-*
           path: dist
           merge-multiple: true
 
@@ -139,18 +169,18 @@ jobs:
           find dist -maxdepth 1 -type f -print | sort
           python3 scripts/merge-build-meta.py dist dist/build-meta.json
           cd dist
-          sha256sum micro.sfx-php${PHPSFX_PHP_VERSION}-* > SHA256SUMS
+          sha256sum swoole-cli-php${PHPSFX_PHP_VERSION}-* > SHA256SUMS
           cat SHA256SUMS
           test -s build-meta.json
 
       - name: Upload combined workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: micro-sfx-release-${{ env.PHPSFX_RELEASE_VERSION }}
+          name: swoole-cli-release-${{ env.PHPSFX_RELEASE_VERSION }}
           retention-days: 90
           if-no-files-found: error
           path: |
-            dist/micro.sfx-php${{ env.PHPSFX_PHP_VERSION }}-*
+            dist/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-*
             dist/SHA256SUMS
             dist/build-meta.json
 
@@ -163,6 +193,6 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            dist/micro.sfx-php${{ env.PHPSFX_PHP_VERSION }}-*
+            dist/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-*
             dist/SHA256SUMS
             dist/build-meta.json

@@ -7,8 +7,13 @@ if [[ $# -lt 1 || $# -gt 3 ]]; then
 Usage: scripts/download-release-asset.sh <platform> [version] [output-file]
 
 Examples:
-  scripts/download-release-asset.sh linux-x64 latest /tmp/micro.sfx
-  scripts/download-release-asset.sh macos-a64 v0.0.5 ./micro.sfx
+  scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
+  scripts/download-release-asset.sh macos-a64 v0.1.0 ./swoole-cli
+
+Environment:
+  PHPSFX_RELEASE_REPO       GitHub repo, default: zoujingli/phpsfx
+  PHPSFX_PHP_VERSION        PHP version line, default: 8.4
+  PHPSFX_ASSET_PREFIX       Release asset prefix, default: swoole-cli
 USAGE
   exit 2
 fi
@@ -18,13 +23,14 @@ VERSION=${2:-latest}
 OUTPUT=${3:-}
 REPO=${PHPSFX_RELEASE_REPO:-zoujingli/phpsfx}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
+ASSET_PREFIX=${PHPSFX_ASSET_PREFIX:-swoole-cli}
 
 case "${PLATFORM}" in
   linux-x64|linux-a64|macos-x64|macos-a64) ;;
   *) echo "Unsupported platform: ${PLATFORM}" >&2; exit 2 ;;
 esac
 
-ASSET="micro.sfx-php${PHP_VERSION}-${PLATFORM}"
+ASSET="${ASSET_PREFIX}-php${PHP_VERSION}-${PLATFORM}"
 if [[ -z "${OUTPUT}" ]]; then
   OUTPUT="${ASSET}"
 fi
