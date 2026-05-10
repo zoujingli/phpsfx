@@ -170,10 +170,8 @@ download_swoole_cli_archive() {
   rm -rf "${tmp_dir}"
   mkdir -p "${tmp_dir}" "$(dirname "${archive_file}")"
   echo "Downloading Swoole CLI archive: ${archive_url}" >&2
+  # 读取公开上游源码包不使用当前仓库 GITHUB_TOKEN，避免 token 作用域/跨仓库策略导致 API tarball 302/403 异常。
   curl_headers=(-H "Accept: application/vnd.github+json" -H "User-Agent: phpsfx")
-  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-    curl_headers+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-  fi
   retry_command curl -fL --retry 5 --retry-delay 2 --connect-timeout 30 --max-time 900 "${curl_headers[@]}" -o "${archive_file}" "${archive_url}"
   tar -xzf "${archive_file}" -C "${tmp_dir}" --strip-components=1
   rm -rf "${SWOOLE_CLI_DIR}"
