@@ -31,17 +31,32 @@ def main() -> int:
         return 1
 
     first = platforms[0]
+    php_versions = sorted({str(item.get("php_version", "")) for item in platforms if item.get("php_version", "")})
+    profiles = sorted({str(item.get("profile", "")) for item in platforms if item.get("profile", "")})
+    swoole_cli_refs = sorted({str(item.get("swoole_cli_ref", "")) for item in platforms if item.get("swoole_cli_ref", "")})
+    profile_components = {
+        profile: next(
+            (
+                str(item.get("extensions", ""))
+                for item in platforms
+                if str(item.get("profile", "")) == profile and item.get("extensions", "")
+            ),
+            "",
+        )
+        for profile in profiles
+    }
     payload = {
         "version": env_or_default("PHPSFX_RELEASE_VERSION", ""),
         "runtime": "swoole-cli",
         "sfx_format": "swoole-cli + payload + pack('J', payloadSize)",
-        "profile": env_or_default("PHPSFX_PROFILE_NAME", first.get("profile", "")),
-        "php_version": env_or_default("PHPSFX_PHP_VERSION", first.get("php_version", "")),
-        "swoole_cli_ref": env_or_default("PHPSFX_SWOOLE_CLI_REF", first.get("swoole_cli_ref", "")),
-        "extensions": env_or_default("PHPSFX_EXTENSIONS", first.get("extensions", "")),
-        "required_extensions": env_or_default("PHPSFX_REQUIRED_EXTENSIONS", first.get("required_extensions", "")),
-        "forbidden_extensions": env_or_default("PHPSFX_FORBIDDEN_EXTENSIONS", first.get("forbidden_extensions", "")),
-        "prepare_flags": env_or_default("PHPSFX_SWOOLE_CLI_PREPARE_FLAGS", first.get("prepare_flags", "")),
+        "profiles": profiles,
+        "profile_components": profile_components,
+        "php_versions": php_versions,
+        "swoole_cli_refs": swoole_cli_refs,
+        "extensions": env_or_default("PHPSFX_EXTENSIONS", first.get("extensions", "")) if len(profiles) <= 1 else "",
+        "required_extensions": env_or_default("PHPSFX_REQUIRED_EXTENSIONS", first.get("required_extensions", "")) if len(profiles) <= 1 else "",
+        "forbidden_extensions": env_or_default("PHPSFX_FORBIDDEN_EXTENSIONS", first.get("forbidden_extensions", "")) if len(profiles) <= 1 else "",
+        "prepare_flags": env_or_default("PHPSFX_SWOOLE_CLI_PREPARE_FLAGS", first.get("prepare_flags", "")) if len(profiles) <= 1 else "",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "platforms": platforms,
     }

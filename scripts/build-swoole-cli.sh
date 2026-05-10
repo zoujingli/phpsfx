@@ -3,7 +3,8 @@
 set -Eeuo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-PROFILE_FILE=${PHPSFX_PROFILE_FILE:-"${ROOT_DIR}/scripts/profiles/hyperfadmin-slim.env"}
+PROFILE=${PHPSFX_PROFILE:-${PHPSFX_PROFILE_NAME:-min}}
+PROFILE_FILE=${PHPSFX_PROFILE_FILE:-"${ROOT_DIR}/scripts/profiles/${PROFILE}.env"}
 if [[ -n "${PROFILE_FILE}" && "${PROFILE_FILE}" != "none" ]]; then
   [[ "${PROFILE_FILE}" = /* ]] || PROFILE_FILE="${ROOT_DIR}/${PROFILE_FILE}"
   if [[ ! -f "${PROFILE_FILE}" ]]; then
@@ -17,7 +18,18 @@ fi
 PLATFORM=${1:-${PHPSFX_PLATFORM:-}}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
-SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
+default_swoole_cli_ref() {
+  case "$1" in
+    8.1) echo "v6.0.2.0" ;;
+    8.4) echo "v6.2.0.0" ;;
+    *)
+      echo "Unsupported PHP version line for default Swoole CLI ref: $1" >&2
+      echo "Set PHPSFX_SWOOLE_CLI_REF explicitly if you want to build this PHP line." >&2
+      return 2
+      ;;
+  esac
+}
+SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-$(default_swoole_cli_ref "${PHP_VERSION}")}
 SWOOLE_CLI_DIR=${PHPSFX_SWOOLE_CLI_DIR:-"${ROOT_DIR}/.build/swoole-cli"}
 DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist"}
 HOST_JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
@@ -27,13 +39,18 @@ if [[ "${GITHUB_ACTIONS:-}" == "true" && -z "${PHPSFX_BUILD_JOBS:-}" ]]; then
   DEFAULT_JOBS=2
 fi
 JOBS=${PHPSFX_BUILD_JOBS:-${DEFAULT_JOBS}}
-PROFILE_NAME=${PHPSFX_PROFILE_NAME:-hyperfadmin-slim}
-DEFAULT_EXTENSIONS='bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,openssl,pcntl,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
-DEFAULT_PREPARE_FLAGS='+bcmath +ctype +curl +fileinfo +filter +iconv +mbstring +openssl +pcntl +pdo_mysql +phar +posix +redis +sockets +sodium +swoole +tokenizer +xml +zip +zlib -bz2 -exif -gd -gettext -gmp -imagick -intl -mongodb -mysqli -opcache -readline -session -soap -sqlite3 -xlswriter -xsl -yaml'
-PREPARE_FLAGS=${PHPSFX_SWOOLE_CLI_PREPARE_FLAGS:-${DEFAULT_PREPARE_FLAGS}}
-EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,sodium,sockets}
-FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-bz2,exif,gd,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,sqlite3,xlswriter,xsl,yaml,opcache}
+PROFILE_NAME=${PHPSFX_PROFILE_NAME:-${PHPSFX_PROFILE:-min}}
+DEFAULT_EXTENSIONS='bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,mysqlnd,openssl,pcntl,pdo,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
+DEFAULT_PREPARE_FLAGS='+bcmath +ctype +curl +fileinfo +filter +iconv +mbstring +mysqlnd +openssl +pcntl +pdo +pdo_mysql +phar +posix +redis +sockets +sodium +swoole +tokenizer +xml +zip +zlib -bz2 -exif -gd -gettext -gmp -imagick -intl -mongodb -mysqli -opcache -readline -session -soap -sqlite3 -xlswriter -xsl -yaml'
+# PHPSFX_SWOOLE_CLI_PREPARE_FLAGS 允许显式设置为空字符串：
+# - min/mid profile 会提供裁剪后的 +extension/-extension 参数；
+# - max profile 需要空参数以保留 Swoole CLI 上游默认组件集合。
+PREPARE_FLAGS=${PHPSFX_SWOOLE_CLI_PREPARE_FLAGS-${DEFAULT_PREPARE_FLAGS}}
+EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS-swoole,redis,pdo,pdo_mysql,mysqlnd,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,sodium,sockets,posix,pcntl}
+FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS-bz2,exif,gd,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,sqlite3,xlswriter,xsl,yaml,opcache}
 DOWNLOAD_MIRROR_URL=${PHPSFX_DOWNLOAD_MIRROR_URL:-}
+SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-}
+STRIP_BINARY=${PHPSFX_STRIP_BINARY:-1}
 
 usage() {
   cat <<'USAGE'
@@ -45,12 +62,14 @@ Platforms:
 Important environment variables:
   PHPSFX_PHP_VERSION                 PHP version prefix used for asset name and validation, default: 8.4
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
-  PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.2.0.0
+  PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.0.2.0 for PHP 8.1, v6.2.0.0 for PHP 8.4
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
+  PHPSFX_SWOOLE_SRC_REF              Optional swoole-src tag/ref when upstream ref lacks sapi/SWOOLE-VERSION.conf
   PHPSFX_REQUIRED_EXTENSIONS         Comma-separated runtime extensions checked after build
   PHPSFX_FORBIDDEN_EXTENSIONS        Comma-separated extensions that must not be loaded
   PHPSFX_ALLOW_EXTRA_EXTENSIONS      Set to 1 to skip forbidden-extension checks for local full-runtime smoke
-  PHPSFX_PROFILE_FILE                Profile env file, default: scripts/profiles/hyperfadmin-slim.env
+  PHPSFX_PROFILE                     Runtime component profile: min, mid, or max, default: min
+  PHPSFX_PROFILE_FILE                Profile env file, default: scripts/profiles/${PHPSFX_PROFILE}.env
   PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS Comma-separated prepare.php default extension list override
   PHPSFX_SWOOLE_SLIM_EXTENSION       Set to 1 to trim optional Swoole extension features, default from profile: 1
   PHPSFX_CURL_SLIM_LIBRARY           Set to 1 to trim optional libcurl features, default from profile: 1
@@ -58,6 +77,7 @@ Important environment variables:
   PHPSFX_ZLIB_SLIM_LIBRARY           Set to 1 to remove unrelated zlib library deps, default from profile: 1
   PHPSFX_REDIS_DISABLE_SESSION       Set to 1 to build redis without session hooks, default from profile: 1
   PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
+  PHPSFX_STRIP_BINARY                Set to 1 to strip debug symbols from release binary, default: 1
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
   PHPSFX_DOWNLOAD_MIRROR_URL         Optional Swoole CLI dependency mirror URL passed to prepare.php
   PHPSFX_DIST_DIR                    Output directory, default: ./dist
@@ -115,6 +135,27 @@ sha256_file() {
   fi
 }
 
+strip_output_binary() {
+  local binary=$1 before after
+  if [[ "${STRIP_BINARY}" != "1" && "${STRIP_BINARY}" != "true" && "${STRIP_BINARY}" != "yes" ]]; then
+    return 0
+  fi
+  if ! command -v strip >/dev/null 2>&1; then
+    echo "strip command not found, keep unstripped binary: ${binary}" >&2
+    return 0
+  fi
+
+  before=$(wc -c < "${binary}" | tr -d '[:space:]')
+  case "${PLATFORM}" in
+    macos-*) strip -x "${binary}" 2>/dev/null || strip "${binary}" 2>/dev/null || true ;;
+    *) strip --strip-all "${binary}" 2>/dev/null || strip "${binary}" 2>/dev/null || true ;;
+  esac
+  after=$(wc -c < "${binary}" | tr -d '[:space:]')
+  if [[ "${before}" != "${after}" ]]; then
+    echo "Stripped ${binary}: ${before} -> ${after} bytes" >&2
+  fi
+}
+
 download_swoole_cli_archive() {
   local tmp_dir archive_url archive_file
   tmp_dir="${SWOOLE_CLI_DIR}.archive.$$"
@@ -132,9 +173,21 @@ download_swoole_cli_archive() {
 }
 
 checkout_swoole_cli() {
-  local preserved_pool
+  local preserved_pool origin_url need_checkout
   mkdir -p "${DIST_DIR}" "$(dirname "${SWOOLE_CLI_DIR}")"
-  if [[ ! -d "${SWOOLE_CLI_DIR}/.git" && ! -f "${SWOOLE_CLI_DIR}/prepare.php" ]]; then
+
+  need_checkout=0
+  if [[ -d "${SWOOLE_CLI_DIR}/.git" ]]; then
+    origin_url=$(git -C "${SWOOLE_CLI_DIR}" remote get-url origin 2>/dev/null || true)
+    if [[ "${origin_url}" != "${SWOOLE_CLI_REPO}" ]]; then
+      echo "Existing checkout remote does not match Swoole CLI repo, recreating: ${origin_url:-<none>}" >&2
+      need_checkout=1
+    fi
+  elif [[ ! -f "${SWOOLE_CLI_DIR}/prepare.php" ]]; then
+    need_checkout=1
+  fi
+
+  if [[ "${need_checkout}" == "1" ]]; then
     preserved_pool=""
     if [[ -d "${SWOOLE_CLI_DIR}/pool" ]]; then
       preserved_pool=$(mktemp -d)
@@ -180,7 +233,13 @@ ERROR
 
 prime_swoole_extension_archive() {
   local swoole_version tgz_file archive_url tmp_file first_entry helper_script helper_tmp
-  swoole_version=$(tr -d '[:space:]' < sapi/SWOOLE-VERSION.conf)
+  if [[ -n "${SWOOLE_SRC_REF}" ]]; then
+    swoole_version="${SWOOLE_SRC_REF}"
+  elif [[ -f sapi/SWOOLE-VERSION.conf ]]; then
+    swoole_version=$(tr -d '[:space:]' < sapi/SWOOLE-VERSION.conf)
+  else
+    swoole_version="${SWOOLE_CLI_REF%.0}"
+  fi
   tgz_file="${SWOOLE_CLI_DIR}/pool/ext/swoole-${swoole_version}.tgz"
 
   # 上游 download-swoole-src-archive.sh 在部分 runner 上会被 sh 执行，导致 [[ 语法失败后重新 clone swoole-src。
@@ -265,9 +324,9 @@ use SwooleCli\Extension;
 use SwooleCli\Preprocessor;
 
 return function (Preprocessor $p) {
-    // HyperfAdmin slim profile:
+    // slim profile:
     // 保留 Swoole HTTP/TCP/WebSocket server、coroutine、mysqlnd、curl hook 和 c-ares DNS 能力；
-    // 不启用 pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
+    // 不启用 pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd 等可选功能，减少依赖库和二进制体积。
     $dependentLibraries = ['curl', 'openssl', 'cares', 'zlib'];
     $dependentExtensions = ['curl', 'openssl', 'sockets', 'mysqlnd', 'pdo'];
 
@@ -550,7 +609,10 @@ composer install --no-interaction --no-progress --prefer-dist --no-dev --no-scri
 
 # Swoole CLI 官方构建链路：prepare.php 生成 make.sh，随后依次构建依赖库、configure、build。
 # prepare.php 支持 +extension/-extension 裁剪扩展；--without-docker 让工作目录固定为当前 checkout，适合 GitHub runner/WSL/macOS。
-read -r -a PREPARE_ARGS <<< "${PREPARE_FLAGS}"
+PREPARE_ARGS=()
+if [[ -n "${PREPARE_FLAGS}" ]]; then
+  read -r -a PREPARE_ARGS <<< "${PREPARE_FLAGS}"
+fi
 if [[ -n "${DOWNLOAD_MIRROR_URL}" ]]; then
   PREPARE_ARGS+=("--with-download-mirror-url=${DOWNLOAD_MIRROR_URL}")
 fi
@@ -566,8 +628,10 @@ if [[ ! -s "${SWOOLE_CLI_BIN}" ]]; then
   exit 1
 fi
 
-ASSET_NAME="swoole-cli-php${PHP_VERSION}-${PLATFORM}"
+ASSET_NAME="swoole-cli-php${PHP_VERSION}-${PROFILE_NAME}-${PLATFORM}"
 cp "${SWOOLE_CLI_BIN}" "${DIST_DIR}/${ASSET_NAME}"
+chmod +x "${DIST_DIR}/${ASSET_NAME}"
+strip_output_binary "${DIST_DIR}/${ASSET_NAME}"
 chmod +x "${DIST_DIR}/${ASSET_NAME}"
 
 PHPSFX_EXPECTED_PHP_PREFIX="${PHP_VERSION}." \
@@ -577,7 +641,8 @@ PHPSFX_FORBIDDEN_EXTENSIONS="${FORBIDDEN_EXTENSIONS}" \
 
 SHA256=$(sha256_file "${DIST_DIR}/${ASSET_NAME}")
 BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
+META_NAME="build-meta-php${PHP_VERSION}-${PROFILE_NAME}-${PLATFORM}.json"
+cat > "${DIST_DIR}/${META_NAME}" <<META
 {
   "platform": "${PLATFORM}",
   "asset": "${ASSET_NAME}",
@@ -593,8 +658,10 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
   "zlib_slim_library": "${PHPSFX_ZLIB_SLIM_LIBRARY:-0}",
   "redis_disable_session": "${PHPSFX_REDIS_DISABLE_SESSION:-0}",
   "oniguruma_clang_compat": "${PHPSFX_ONIGURUMA_CLANG_COMPAT:-0}",
+  "strip_binary": "${STRIP_BINARY}",
   "swoole_cli_repo": "${SWOOLE_CLI_REPO}",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
+  "swoole_src_ref": "${SWOOLE_SRC_REF}",
   "swoole_cli_commit": "${SWOOLE_CLI_COMMIT}",
   "prepare_flags": "${PREPARE_FLAGS}",
   "global_prefix": "${GLOBAL_PREFIX}",

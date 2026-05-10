@@ -13,6 +13,7 @@ Examples:
 Environment:
   PHPSFX_RELEASE_REPO       GitHub repo, default: zoujingli/phpsfx
   PHPSFX_PHP_VERSION        PHP version line, default: 8.4
+  PHPSFX_PROFILE            Runtime component profile: min, mid, or max, default: min
   PHPSFX_ASSET_PREFIX       Release asset prefix, default: swoole-cli
 USAGE
   exit 2
@@ -23,6 +24,7 @@ VERSION=${2:-latest}
 OUTPUT=${3:-}
 REPO=${PHPSFX_RELEASE_REPO:-zoujingli/phpsfx}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
+PROFILE=${PHPSFX_PROFILE:-${PHPSFX_PROFILE_NAME:-min}}
 ASSET_PREFIX=${PHPSFX_ASSET_PREFIX:-swoole-cli}
 
 case "${PLATFORM}" in
@@ -30,7 +32,7 @@ case "${PLATFORM}" in
   *) echo "Unsupported platform: ${PLATFORM}" >&2; exit 2 ;;
 esac
 
-ASSET="${ASSET_PREFIX}-php${PHP_VERSION}-${PLATFORM}"
+ASSET="${ASSET_PREFIX}-php${PHP_VERSION}-${PROFILE}-${PLATFORM}"
 if [[ -z "${OUTPUT}" ]]; then
   OUTPUT="${ASSET}"
 fi

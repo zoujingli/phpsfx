@@ -8,7 +8,7 @@ Usage: scripts/pack-php.sh <swoole-cli> <entry.php> <output-binary>
 
 将单个 PHP 入口文件追加到 swoole-cli 后生成单文件可执行程序。
 Swoole CLI SFX 格式固定为：swoole-cli + entry.php + pack('J', phpFileSize)。
-适合小型命令行脚本或自包含入口文件；复杂项目建议先打 Phar，再用 pack-phar.sh。
+适合小型命令行脚本或自包含入口文件；多文件应用建议先打 Phar，再用 pack-phar.sh。
 运行生成的二进制时需要使用 --self，例如：./output --self list。
 USAGE
   exit 2

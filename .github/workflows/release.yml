@@ -12,14 +12,28 @@ on:
         default: 'v0.1.0'
         type: string
       php_version:
-        description: 'PHP version line'
+        description: 'PHP version to build: all, 8.4, or 8.1'
         required: true
-        default: '8.4'
-        type: string
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - '8.4'
+          - '8.1'
+      profile:
+        description: 'Component profile to build: all, min, mid, or max'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - min
+          - mid
+          - max
       swoole_cli_ref:
-        description: 'swoole-cli branch, tag, or commit'
-        required: true
-        default: 'v6.2.0.0'
+        description: 'Optional swoole-cli ref override. Only valid when php_version is 8.4 or 8.1.'
+        required: false
+        default: ''
         type: string
       prepare_flags:
         description: 'Optional prepare.php flags. Leave empty to use repository defaults.'
@@ -36,31 +50,96 @@ concurrency:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  PHPSFX_PROFILE_FILE: scripts/profiles/hyperfadmin-slim.env
 
 jobs:
+  plan:
+    name: Plan build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      php_versions: ${{ steps.matrix.outputs.php_versions }}
+    steps:
+      - name: Generate matrix
+        id: matrix
+        env:
+          INPUT_PHP_VERSION: ${{ github.event.inputs.php_version || 'all' }}
+          INPUT_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref }}
+          INPUT_PROFILE: ${{ github.event.inputs.profile || 'all' }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          platforms = [
+              ("linux-x64", "ubuntu-latest"),
+              ("linux-a64", "ubuntu-24.04-arm"),
+              ("macos-x64", "macos-15-intel"),
+              ("macos-a64", "macos-15"),
+          ]
+          defaults = {
+              "8.4": {"swoole_cli_ref": "v6.2.0.0", "swoole_src_ref": ""},
+              "8.1": {"swoole_cli_ref": "v6.0.2.0", "swoole_src_ref": "v6.0.2"},
+          }
+          selected = os.environ.get("INPUT_PHP_VERSION") or "all"
+          selected_profile = os.environ.get("INPUT_PROFILE") or "all"
+          override_ref = os.environ.get("INPUT_SWOOLE_CLI_REF") or ""
+          if selected == "all":
+              if override_ref:
+                  raise SystemExit("swoole_cli_ref override requires php_version to be 8.4 or 8.1, not all")
+              versions = ["8.4", "8.1"]
+          elif selected in defaults:
+              versions = [selected]
+          else:
+              raise SystemExit(f"Unsupported php_version: {selected}")
+
+          if selected_profile == "all":
+              profiles = ["min", "mid", "max"]
+          elif selected_profile in {"min", "mid", "max"}:
+              profiles = [selected_profile]
+          else:
+              raise SystemExit(f"Unsupported profile: {selected_profile}")
+
+          include = []
+          for php_version in versions:
+              ref = override_ref or defaults[php_version]["swoole_cli_ref"]
+              src_ref = "" if override_ref else defaults[php_version]["swoole_src_ref"]
+              for profile in profiles:
+                  for platform, runner in platforms:
+                      include.append({
+                          "php_version": php_version,
+                          "swoole_cli_ref": ref,
+                          "swoole_src_ref": src_ref,
+                          "profile": profile,
+                          "platform": platform,
+                          "runner": runner,
+                      })
+
+          matrix = json.dumps({"include": include}, separators=(",", ":"))
+          php_versions = ",".join(versions)
+          out = Path(os.environ["GITHUB_OUTPUT"])
+          with out.open("a", encoding="utf-8") as fp:
+              fp.write(f"matrix={matrix}\n")
+              fp.write(f"php_versions={php_versions}\n")
+          print(json.dumps({"include": include}, indent=2))
+          PY
+
   build:
-    name: Build ${{ matrix.platform }}
+    name: Build PHP ${{ matrix.php_version }} ${{ matrix.profile }} ${{ matrix.platform }}
+    needs: plan
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 360
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: linux-x64
-            runner: ubuntu-latest
-          - platform: linux-a64
-            runner: ubuntu-24.04-arm
-          - platform: macos-x64
-            runner: macos-15-intel
-          - platform: macos-a64
-            runner: macos-15
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
 
     env:
       PHPSFX_PLATFORM: ${{ matrix.platform }}
-      PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.4' }}
-      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.0.0' }}
-      PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/${{ matrix.platform }}
+      PHPSFX_PROFILE: ${{ matrix.profile }}
+      PHPSFX_PHP_VERSION: ${{ matrix.php_version }}
+      PHPSFX_SWOOLE_CLI_REF: ${{ matrix.swoole_cli_ref }}
+      PHPSFX_SWOOLE_SRC_REF: ${{ matrix.swoole_src_ref }}
+      PHPSFX_DIST_DIR: ${{ github.workspace }}/dist
       PHPSFX_BUILD_JOBS: 2
 
     steps:
@@ -87,7 +166,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ github.event.inputs.php_version || '8.4' }}
+          php-version: ${{ matrix.php_version }}
           tools: composer:v2
           coverage: none
           extensions: curl, openssl, mbstring, phar, zip
@@ -97,10 +176,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build/swoole-cli/pool
-          key: phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-${{ hashFiles('scripts/profiles/hyperfadmin-slim.env') }}
+          key: phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-php${{ matrix.php_version }}-${{ matrix.profile }}-${{ matrix.swoole_cli_ref }}-${{ matrix.swoole_src_ref }}-${{ hashFiles('scripts/profiles/*.env') }}
           restore-keys: |
-            phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-
-            phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-
+            phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-php${{ matrix.php_version }}-${{ matrix.profile }}-${{ matrix.swoole_cli_ref }}-${{ matrix.swoole_src_ref }}-
+            phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-php${{ matrix.php_version }}-${{ matrix.profile }}-
 
       - name: Show environment
         run: |
@@ -110,6 +189,9 @@ jobs:
           composer --version
           git --version
           make --version | head -1
+          echo "PHPSFX_PHP_VERSION=${PHPSFX_PHP_VERSION}"
+          echo "PHPSFX_SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF}"
+          echo "PHPSFX_SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF}"
 
       - name: Build and validate swoole-cli
         env:
@@ -120,58 +202,59 @@ jobs:
             unset PHPSFX_SWOOLE_CLI_PREPARE_FLAGS
           fi
           set +e
-          bash scripts/build-swoole-cli.sh "${PHPSFX_PLATFORM}" 2>&1 | tee "build-${PHPSFX_PLATFORM}.log"
+          bash scripts/build-swoole-cli.sh "${PHPSFX_PLATFORM}" 2>&1 | tee "build-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}.log"
           status=${PIPESTATUS[0]}
           set -e
           if [ "${status}" -ne 0 ]; then
             {
               echo "== matched errors =="
-              grep -Ein 'fatal error|[^A-Za-z]error:|undefined reference|failed|killed|No such|cannot find|not found|permission denied|make(\\[[0-9]+\\])?: \\*\\*\\*' "build-${PHPSFX_PLATFORM}.log" | tail -140 || true
+              grep -Ein 'fatal error|[^A-Za-z]error:|undefined reference|failed|killed|No such|cannot find|not found|permission denied|make(\[[0-9]+\])?: \*\*\*' "build-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}.log" | tail -140 || true
               echo
               echo "== build log tail =="
-              tail -240 "build-${PHPSFX_PLATFORM}.log"
-            } > "build-${PHPSFX_PLATFORM}-summary.log"
-            if [ ! -s "build-${PHPSFX_PLATFORM}-summary.log" ]; then
-              tail -120 "build-${PHPSFX_PLATFORM}.log" > "build-${PHPSFX_PLATFORM}-summary.log"
+              tail -240 "build-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}.log"
+            } > "build-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}-summary.log"
+            if [ ! -s "build-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}-summary.log" ]; then
+              tail -120 "build-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}.log" > "build-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}-summary.log"
             fi
-            tail_text=$(cat "build-${PHPSFX_PLATFORM}-summary.log" | tr '\n' '|' | sed -e 's/%/%25/g')
-            echo "::error title=Build failed ${PHPSFX_PLATFORM}::${tail_text}"
+            tail_text=$(cat "build-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}-summary.log" | tr '\n' '|' | sed -e 's/%/%25/g')
+            echo "::error title=Build failed PHP ${PHPSFX_PHP_VERSION} ${PHPSFX_PROFILE} ${PHPSFX_PLATFORM}::${tail_text}"
             exit "${status}"
           fi
 
       - name: Test PHP and Phar SFX packaging
         run: |
-          bash scripts/test-packaging.sh "dist/${PHPSFX_PLATFORM}/swoole-cli-php${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}"
+          bash scripts/test-packaging.sh "dist/swoole-cli-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}"
 
       - name: Upload failure log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-${{ matrix.platform }}
+          name: build-log-php${{ matrix.php_version }}-${{ matrix.profile }}-${{ matrix.platform }}
           retention-days: 7
           if-no-files-found: ignore
           path: |
-            build-${{ matrix.platform }}.log
-            build-${{ matrix.platform }}-summary.log
+            build-php${{ matrix.php_version }}-${{ matrix.profile }}-${{ matrix.platform }}.log
+            build-php${{ matrix.php_version }}-${{ matrix.profile }}-${{ matrix.platform }}-summary.log
 
       - name: Upload platform artifact
         uses: actions/upload-artifact@v4
         with:
-          name: swoole-cli-${{ matrix.platform }}
+          name: swoole-cli-php${{ matrix.php_version }}-${{ matrix.profile }}-${{ matrix.platform }}
           retention-days: 30
           if-no-files-found: error
           path: |
-            dist/${{ matrix.platform }}/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-${{ matrix.platform }}
-            dist/${{ matrix.platform }}/build-meta-${{ matrix.platform }}.json
+            dist/swoole-cli-php${{ matrix.php_version }}-${{ matrix.profile }}-${{ matrix.platform }}
+            dist/build-meta-php${{ matrix.php_version }}-${{ matrix.profile }}-${{ matrix.platform }}.json
 
   release:
     name: Publish Release
     runs-on: ubuntu-latest
-    needs: build
+    needs:
+      - plan
+      - build
     env:
       PHPSFX_RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
-      PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.4' }}
-      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.0.0' }}
+      PHPSFX_RELEASE_PHP_VERSIONS: ${{ needs.plan.outputs.php_versions }}
       PHPSFX_SWOOLE_CLI_PREPARE_FLAGS: ${{ github.event.inputs.prepare_flags }}
     steps:
       - name: Checkout phpsfx
@@ -180,7 +263,7 @@ jobs:
       - name: Download platform artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: swoole-cli-*
+          pattern: swoole-cli-php*
           path: dist
           merge-multiple: true
 
@@ -190,7 +273,7 @@ jobs:
           find dist -maxdepth 1 -type f -print | sort
           python3 scripts/merge-build-meta.py dist dist/build-meta.json
           cd dist
-          sha256sum swoole-cli-php${PHPSFX_PHP_VERSION}-* > SHA256SUMS
+          sha256sum swoole-cli-php*-* > SHA256SUMS
           cat SHA256SUMS
           test -s build-meta.json
 
@@ -201,7 +284,7 @@ jobs:
           retention-days: 90
           if-no-files-found: error
           path: |
-            dist/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-*
+            dist/swoole-cli-php*-*
             dist/SHA256SUMS
             dist/build-meta.json
 
@@ -214,14 +297,14 @@ jobs:
           draft: false
           prerelease: false
           body: |
-            Swoole CLI PHP ${{ env.PHPSFX_PHP_VERSION }} runtime for HyperfAdmin.
+            Swoole CLI PHP ${{ env.PHPSFX_RELEASE_PHP_VERSIONS }} runtime.
 
-            This release uses the `hyperfadmin-slim` profile and Swoole CLI SFX format:
+            This release contains `min`, `mid`, and/or `max` component profiles and uses Swoole CLI SFX format:
 
             `swoole-cli + payload.php|app.phar + pack('J', payloadSize)`
 
             Run packed applications with `--self`, for example `./app --self list`.
           files: |
-            dist/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-*
+            dist/swoole-cli-php*-*
             dist/SHA256SUMS
             dist/build-meta.json

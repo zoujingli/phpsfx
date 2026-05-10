@@ -8,7 +8,7 @@ Usage: scripts/pack-phar.sh <swoole-cli> <app.phar> <output-binary>
 
 将可执行 Phar 追加到 swoole-cli 后生成单文件可执行程序。
 Swoole CLI SFX 格式固定为：swoole-cli + app.phar + pack('J', pharSize)。
-HyperfAdmin 通过 xadmin:build:phar 生成的 system.bin 属于此类输入。
+脚本兼容 .bin 等自定义 Phar 后缀，会先复制为临时 .phar 做轻量校验。
 运行生成的二进制时需要使用 --self，例如：./output --self list。
 USAGE
   exit 2
@@ -32,7 +32,7 @@ chmod +x "${SWOOLE_CLI}"
 "${SWOOLE_CLI}" -r 'exit(defined("SWOOLE_CLI") ? 0 : 1);'
 
 # 用 PHP Phar 元数据做轻量校验，避免把普通文件误当 Phar 追加。
-# Phar API 依赖文件后缀识别，因此对 HyperfAdmin system.bin 这类自定义后缀先复制为临时 .phar 再校验。
+# Phar API 依赖文件后缀识别，因此对 .bin 等自定义后缀先复制为临时 .phar 再校验。
 TMP_PHAR=""
 VALIDATE_PHAR="${APP_PHAR}"
 case "${APP_PHAR}" in
