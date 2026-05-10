@@ -14,8 +14,7 @@ USAGE
 fi
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-PROFILE=${PHPSFX_PROFILE:-${PHPSFX_PROFILE_NAME:-min}}
-PROFILE_FILE=${PHPSFX_PROFILE_FILE:-"${ROOT_DIR}/scripts/profiles/${PROFILE}.env"}
+PROFILE_FILE=${PHPSFX_PROFILE_FILE:-"${ROOT_DIR}/scripts/profiles/hyperfadmin-slim.env"}
 if [[ -n "${PROFILE_FILE}" && "${PROFILE_FILE}" != "none" ]]; then
   [[ "${PROFILE_FILE}" = /* ]] || PROFILE_FILE="${ROOT_DIR}/${PROFILE_FILE}"
   if [[ ! -f "${PROFILE_FILE}" ]]; then
@@ -35,16 +34,12 @@ else
 fi
 
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
-case "${PHP_VERSION}" in
-  8.4) DEFAULT_SWOOLE_CLI_REF=v6.2.0.0 ;;
-  *) DEFAULT_SWOOLE_CLI_REF=custom ;;
-esac
-SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-${DEFAULT_SWOOLE_CLI_REF}}
+SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
 DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist"}
-PROFILE_NAME=${PHPSFX_PROFILE_NAME:-${PHPSFX_PROFILE:-min}}
-EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS-swoole,redis,pdo,pdo_mysql,mysqlnd,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,sodium,sockets,posix,pcntl}
-FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS-bz2,exif,gd,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,sqlite3,xlswriter,xsl,yaml,opcache}
-DEFAULT_EXTENSIONS='bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,mysqlnd,openssl,pcntl,pdo,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
+PROFILE_NAME=${PHPSFX_PROFILE_NAME:-hyperfadmin-slim}
+EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,sodium,sockets}
+FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-bz2,exif,gd,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,sqlite3,xlswriter,xsl,yaml,opcache}
+DEFAULT_EXTENSIONS='bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,openssl,pcntl,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
 
 case "${PLATFORM}" in
   linux-x64|linux-a64|macos-x64|macos-a64) ;;
@@ -63,7 +58,7 @@ else
 fi
 
 mkdir -p "${DIST_DIR}"
-ASSET_NAME="swoole-cli-php${PHP_VERSION}-${PROFILE_NAME}-${PLATFORM}"
+ASSET_NAME="swoole-cli-php${PHP_VERSION}-${PLATFORM}"
 cp "${SOURCE_BIN}" "${DIST_DIR}/${ASSET_NAME}"
 chmod +x "${DIST_DIR}/${ASSET_NAME}"
 
@@ -76,8 +71,7 @@ PHP_FULL_VERSION=$("${DIST_DIR}/${ASSET_NAME}" -r 'echo PHP_VERSION;')
 SWOOLE_VERSION=$("${DIST_DIR}/${ASSET_NAME}" -r 'echo defined("SWOOLE_VERSION") ? SWOOLE_VERSION : "";')
 SHA256=$(sha256_file "${DIST_DIR}/${ASSET_NAME}")
 BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-META_NAME="build-meta-php${PHP_VERSION}-${PROFILE_NAME}-${PLATFORM}.json"
-cat > "${DIST_DIR}/${META_NAME}" <<META
+cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
 {
   "platform": "${PLATFORM}",
   "asset": "${ASSET_NAME}",
