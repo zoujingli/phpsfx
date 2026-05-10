@@ -49,6 +49,15 @@ session,soap,sqlite3,xlswriter,xsl,yaml
 
 说明：Swoole CLI 的 `+xml` 构建项会同时启用 `dom/simplexml/xmlreader/xmlwriter`；`json/hash/pcre/reflection/PDO/libxml` 等属于 PHP core 或依赖扩展带出的基础能力，不作为独立 `prepare.php +xxx` 参数传入。`intl/opcache` 当前不是 HyperfAdmin 必需项，默认不打包。
 
+构建脚本还会把 Swoole CLI 上游默认的 full profile 收敛为 `PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS`，并进一步裁剪底层依赖：
+
+- Swoole 扩展：保留 HyperfAdmin 需要的 server/coroutine/curl hook/mysqlnd/c-ares DNS，默认不启用 `pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd` 等未使用功能。
+- libcurl：保留 HTTP(S)、OpenSSL、zlib、c-ares，默认不启用 HTTP3、SSH2、IDN、PSL、Brotli、Zstd。
+- libzip：保留 Zip + zlib + OpenSSL，默认不启用 BZip2、LZMA、Zstd。
+- zlib：移除上游模板中与 zlib 构建无关的 BZip2 依赖。
+
+依赖库安装前缀默认放在 `.build/swoole-cli/.global-prefix/<platform>`，不会写入 `/usr/local/swoole-cli`，适合 GitHub Actions 和 WSL 普通权限构建。
+
 ## 自动发布
 
 GitHub Actions workflow：`.github/workflows/release.yml`。

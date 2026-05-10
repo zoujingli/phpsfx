@@ -51,6 +51,12 @@ Important environment variables:
   PHPSFX_FORBIDDEN_EXTENSIONS        Comma-separated extensions that must not be loaded
   PHPSFX_ALLOW_EXTRA_EXTENSIONS      Set to 1 to skip forbidden-extension checks for local full-runtime smoke
   PHPSFX_PROFILE_FILE                Profile env file, default: scripts/profiles/hyperfadmin-slim.env
+  PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS Comma-separated prepare.php default extension list override
+  PHPSFX_SWOOLE_SLIM_EXTENSION       Set to 1 to trim optional Swoole extension features, default from profile: 1
+  PHPSFX_CURL_SLIM_LIBRARY           Set to 1 to trim optional libcurl features, default from profile: 1
+  PHPSFX_LIBZIP_SLIM_LIBRARY         Set to 1 to trim optional libzip codecs, default from profile: 1
+  PHPSFX_ZLIB_SLIM_LIBRARY           Set to 1 to remove unrelated zlib library deps, default from profile: 1
+  PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
   PHPSFX_DOWNLOAD_MIRROR_URL         Optional Swoole CLI dependency mirror URL passed to prepare.php
   PHPSFX_DIST_DIR                    Output directory, default: ./dist
   PHPSFX_SWOOLE_CLI_DIR              Swoole CLI checkout dir, default: ./.build/swoole-cli
@@ -227,6 +233,232 @@ prime_swoole_extension_archive() {
   echo "Prepared swoole-src ${swoole_version}: ${tgz_file}" >&2
 }
 
+apply_profile_patches() {
+  local enabled_file swoole_file curl_file libzip_file zlib_file ext
+
+  # Swoole CLI 上游默认启用 full profile；这里将默认启用列表改为 profile 明确声明的最小集合，
+  # 防止 prepare.php 在解析依赖时下载 sqlite/intl/gd/imagick/mongodb 等未使用组件。
+  if [[ -n "${PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS:-}" ]]; then
+    enabled_file="${SWOOLE_CLI_DIR}/sapi/src/builder/enabled_extensions.php"
+    {
+      printf '%s\n' '<?php'
+      printf '%s\n' 'return ['
+      IFS=',' read -r -a enabled_extensions <<< "${PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS}"
+      for ext in "${enabled_extensions[@]}"; do
+        ext=$(echo "${ext}" | xargs)
+        [[ -z "${ext}" ]] && continue
+        printf "    '%s',\n" "${ext}"
+      done
+      printf '%s\n' '];'
+    } > "${enabled_file}"
+    echo "Applied enabled extension profile: ${PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS}" >&2
+  fi
+
+  if [[ "${PHPSFX_SWOOLE_SLIM_EXTENSION:-0}" == "1" ]]; then
+    swoole_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/swoole.php"
+    cat > "${swoole_file}" <<'PHP'
+<?php
+
+use SwooleCli\Extension;
+use SwooleCli\Preprocessor;
+
+return function (Preprocessor $p) {
+    // HyperfAdmin slim profile:
+    // 保留 Swoole HTTP/TCP/WebSocket server、coroutine、mysqlnd、curl hook 和 c-ares DNS 能力；
+    // 不启用 pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
+    $dependentLibraries = ['curl', 'openssl', 'cares', 'zlib'];
+    $dependentExtensions = ['curl', 'openssl', 'sockets', 'mysqlnd', 'pdo'];
+
+    $options = [
+        '--enable-swoole',
+        '--enable-sockets',
+        '--enable-mysqlnd',
+        '--enable-swoole-curl',
+        '--enable-cares',
+    ];
+
+    $p->addExtension((new Extension('swoole'))
+        ->withHomePage('https://github.com/swoole/swoole-src')
+        ->withLicense('https://github.com/swoole/swoole-src/blob/master/LICENSE', Extension::LICENSE_APACHE2)
+        ->withManual('https://wiki.swoole.com/#/')
+        ->withOptions(implode(' ', $options))
+        ->withBuildCached(false)
+        ->withDependentLibraries(...$dependentLibraries)
+        ->withDependentExtensions(...$dependentExtensions));
+
+    $p->withVariable('LIBS', '$LIBS ' . ($p->isMacos() ? '-lc++' : '-lstdc++'));
+    $p->withExportVariable('CARES_CFLAGS', '$(pkg-config  --cflags --static  libcares)');
+    $p->withExportVariable('CARES_LIBS', '$(pkg-config    --libs   --static  libcares)');
+};
+PHP
+    echo "Applied slim Swoole extension profile" >&2
+  fi
+
+  if [[ "${PHPSFX_CURL_SLIM_LIBRARY:-0}" == "1" ]]; then
+    curl_file="${SWOOLE_CLI_DIR}/sapi/src/builder/library/curl.php"
+    cat > "${curl_file}" <<'PHP'
+<?php
+
+use SwooleCli\Library;
+use SwooleCli\Preprocessor;
+
+return function (Preprocessor $p) {
+    $curl_prefix = CURL_PREFIX;
+    $openssl_prefix = OPENSSL_PREFIX;
+    $zlib_prefix = ZLIB_PREFIX;
+    $cares_prefix = CARES_PREFIX;
+
+    $p->addLibrary(
+        (new Library('curl'))
+            ->withHomePage('https://curl.se/')
+            ->withManual('https://curl.se/docs/install.html')
+            ->withLicense('https://github.com/curl/curl/blob/master/COPYING', Library::LICENSE_SPEC)
+            ->withUrl('https://github.com/curl/curl/releases/download/curl-8_16_0/curl-8.16.0.tar.gz')
+            ->withFileHash('md5', '3db9de72cc8f04166fa02d3173ac78bb')
+            ->withPrefix($curl_prefix)
+            ->withConfigure(
+                <<<EOF
+            ./configure --help
+
+            PACKAGES='zlib openssl libcares'
+            CPPFLAGS="$(pkg-config  --cflags-only-I  --static \$PACKAGES) -I{$openssl_prefix}/include/openssl/" \
+            LDFLAGS="$(pkg-config   --libs-only-L    --static \$PACKAGES)" \
+            LIBS="$(pkg-config      --libs-only-l    --static \$PACKAGES)" \
+            ./configure --prefix={$curl_prefix}  \
+            --enable-static \
+            --disable-shared \
+            --without-librtmp \
+            --disable-ldap \
+            --disable-ldaps \
+            --disable-rtsp \
+            --enable-http \
+            --enable-alt-svc \
+            --enable-hsts \
+            --enable-http-auth \
+            --enable-mime \
+            --enable-cookies \
+            --enable-doh \
+            --enable-ipv6 \
+            --enable-proxy  \
+            --enable-websockets \
+            --enable-get-easy-options \
+            --enable-file \
+            --enable-unix-sockets  \
+            --enable-progress-meter \
+            --enable-optimize \
+            --with-zlib={$zlib_prefix} \
+            --enable-ares={$cares_prefix} \
+            --with-openssl  \
+            --with-default-ssl-backend=openssl \
+            --without-brotli \
+            --without-zstd \
+            --without-nghttp2 \
+            --without-nghttp3 \
+            --without-ngtcp2 \
+            --without-libidn2 \
+            --without-libpsl \
+            --without-libssh2 \
+            --without-gnutls \
+            --without-mbedtls \
+            --without-wolfssl \
+            --without-libressl \
+            --without-rustls
+
+EOF
+            )
+            ->withPkgName('libcurl')
+            ->withBinPath($curl_prefix . '/bin/')
+            ->withDependentLibraries('openssl', 'cares', 'zlib')
+    );
+};
+PHP
+    echo "Applied slim curl library profile" >&2
+  fi
+
+  if [[ "${PHPSFX_LIBZIP_SLIM_LIBRARY:-0}" == "1" ]]; then
+    libzip_file="${SWOOLE_CLI_DIR}/sapi/src/builder/library/libzip.php"
+    cat > "${libzip_file}" <<'PHP'
+<?php
+
+use SwooleCli\Library;
+use SwooleCli\Preprocessor;
+
+return function (Preprocessor $p) {
+    $openssl_prefix = OPENSSL_PREFIX;
+    $libzip_prefix = ZIP_PREFIX;
+    $zlib_prefix = ZLIB_PREFIX;
+
+    $p->addLibrary(
+        (new Library('libzip'))
+            ->withHomePage('https://libzip.org/')
+            ->withLicense('https://libzip.org/license/', Library::LICENSE_BSD)
+            ->withUrl('https://libzip.org/download/libzip-1.9.2.tar.gz')
+            ->withFileHash('md5', '345a88add7e9dd58aa029ac5b5b361ad')
+            ->withManual('https://libzip.org')
+            ->withPrefix($libzip_prefix)
+            ->withConfigure(
+                <<<EOF
+            mkdir -p build
+            cd build
+            cmake .. \
+            -DCMAKE_INSTALL_PREFIX={$libzip_prefix} \
+            -DCMAKE_POLICY_DEFAULT_CMP0074=NEW \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_TOOLS=OFF \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_DOC=OFF \
+            -DLIBZIP_DO_INSTALL=ON \
+            -DENABLE_GNUTLS=OFF  \
+            -DENABLE_MBEDTLS=OFF \
+            -DENABLE_OPENSSL=ON \
+            -DOPENSSL_USE_STATIC_LIBS=TRUE \
+            -DENABLE_BZIP2=OFF \
+            -DENABLE_COMMONCRYPTO=OFF \
+            -DENABLE_LZMA=OFF \
+            -DENABLE_ZSTD=OFF \
+            -DOpenSSL_ROOT={$openssl_prefix} \
+            -DZLIB_ROOT={$zlib_prefix} \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+
+EOF
+            )
+            ->withMakeOptions('VERBOSE=1')
+            ->withPkgName('libzip')
+            ->withBinPath($libzip_prefix . '/bin/')
+            ->withDependentLibraries('openssl', 'zlib')
+    );
+};
+PHP
+    echo "Applied slim libzip library profile" >&2
+  fi
+
+  if [[ "${PHPSFX_ZLIB_SLIM_LIBRARY:-0}" == "1" ]]; then
+    zlib_file="${SWOOLE_CLI_DIR}/sapi/src/builder/library/zlib.php"
+    cat > "${zlib_file}" <<'PHP'
+<?php
+
+use SwooleCli\Library;
+use SwooleCli\Preprocessor;
+
+return function (Preprocessor $p) {
+    $p->addLibrary(
+        (new Library('zlib'))
+            ->withHomePage('https://zlib.net/')
+            ->withLicense('https://zlib.net/zlib_license.html', Library::LICENSE_SPEC)
+            ->withUrl('https://github.com/madler/zlib/archive/refs/tags/v1.3.1.tar.gz')
+            ->withFile('zlib-v1.3.1.tar.gz')
+            ->withFileHash('md5', 'ddb17dbbf2178807384e57ba0d81e6a1')
+            ->withPrefix(ZLIB_PREFIX)
+            ->withConfigure('./configure --prefix=' . ZLIB_PREFIX . ' --static')
+            ->withPkgName('zlib')
+    );
+};
+PHP
+    echo "Applied slim zlib library profile" >&2
+  fi
+}
+
 if [[ -z "${PLATFORM}" ]]; then
   PLATFORM=$(detect_platform)
 fi
@@ -240,6 +472,7 @@ case "${PLATFORM}" in
     exit 2
     ;;
 esac
+GLOBAL_PREFIX=${PHPSFX_GLOBAL_PREFIX:-"${SWOOLE_CLI_DIR}/.global-prefix/${PLATFORM}"}
 
 require_command git
 require_command php
@@ -255,6 +488,8 @@ else
 fi
 assert_target_php_version
 prime_swoole_extension_archive
+apply_profile_patches
+mkdir -p "${GLOBAL_PREFIX}"
 
 export COMPOSER_ALLOW_SUPERUSER=1
 composer install --no-interaction --no-progress --prefer-dist --no-dev --no-scripts --optimize-autoloader
@@ -265,7 +500,7 @@ read -r -a PREPARE_ARGS <<< "${PREPARE_FLAGS}"
 if [[ -n "${DOWNLOAD_MIRROR_URL}" ]]; then
   PREPARE_ARGS+=("--with-download-mirror-url=${DOWNLOAD_MIRROR_URL}")
 fi
-php prepare.php --without-docker=1 --with-parallel-jobs="${JOBS}" "${PREPARE_ARGS[@]}"
+php prepare.php --without-docker=1 --with-parallel-jobs="${JOBS}" --with-global-prefix="${GLOBAL_PREFIX}" "${PREPARE_ARGS[@]}"
 
 bash ./make.sh all-library
 bash ./make.sh config
@@ -297,10 +532,16 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
   "extensions": "${PHPSFX_EXTENSIONS:-${DEFAULT_EXTENSIONS}}",
   "required_extensions": "${EXPECTED_EXTENSIONS}",
   "forbidden_extensions": "${FORBIDDEN_EXTENSIONS}",
+  "prepare_enabled_extensions": "${PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS:-}",
+  "swoole_slim_extension": "${PHPSFX_SWOOLE_SLIM_EXTENSION:-0}",
+  "curl_slim_library": "${PHPSFX_CURL_SLIM_LIBRARY:-0}",
+  "libzip_slim_library": "${PHPSFX_LIBZIP_SLIM_LIBRARY:-0}",
+  "zlib_slim_library": "${PHPSFX_ZLIB_SLIM_LIBRARY:-0}",
   "swoole_cli_repo": "${SWOOLE_CLI_REPO}",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
   "swoole_cli_commit": "${SWOOLE_CLI_COMMIT}",
   "prepare_flags": "${PREPARE_FLAGS}",
+  "global_prefix": "${GLOBAL_PREFIX}",
   "sha256": "${SHA256}",
   "built_at": "${BUILT_AT}"
 }
