@@ -85,11 +85,11 @@ opcache,curl,iconv,bz2,bcmath,pcntl,filter,session,tokenizer,mbstring,ctype,zlib
 
 `max` 不裁剪官方默认扩展和依赖能力。
 
-## 运行时裁剪
+## 构建兼容性处理
 
-所有 profile 默认移除 php-fpm 源码和 `-P` 入口，只保留 CLI/SFX 相关能力。CLI 内置 Web Server 相关代码保留，避免过度修改上游 CLI 入口造成兼容风险。
+运行时保留 Swoole CLI 的 CLI/SFX、php-fpm 和 CLI 内置 Web Server 入口；本仓库只通过 `min/max` profile 裁剪 PHP 扩展与三方依赖，避免修改上游 SAPI 入口造成兼容风险。
 
-其他兼容性处理：
+兼容性处理：
 
 - macOS 构建使用 oniguruma 6.9.10 release tarball，以兼容新版 clang。
 - 老版本上游引用的 libsodium 下载地址不可用时，构建脚本统一使用 libsodium 1.0.21 release tarball。
@@ -159,7 +159,6 @@ PHPSFX_PROFILE=max \
 | `PHPSFX_SWOOLE_CLI_REF` | Swoole CLI 分支、标签或提交。 |
 | `PHPSFX_SWOOLE_SRC_REF` | 可选 swoole-src ref，主要用于 PHP 8.1 版本线。 |
 | `PHPSFX_SWOOLE_CLI_PREPARE_FLAGS` | 传给上游 `prepare.php` 的扩展开关。 |
-| `PHPSFX_DISABLE_FPM_RUNTIME` | 是否移除 php-fpm 入口，profile 默认启用。 |
 | `PHPSFX_BCMATH_LEGACY_PROTOTYPES` | 是否修复 PHP 8.1 bcmath 旧式函数原型，profile 默认启用。 |
 | `PHPSFX_STRIP_BINARY` | 是否 strip 二进制，默认启用。 |
 

@@ -80,7 +80,6 @@ Important environment variables:
   PHPSFX_REDIS_DISABLE_SESSION       Set to 1 to build redis without session hooks, default from profile: 1
   PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
   PHPSFX_LIBSODIUM_STABLE_LIBRARY    Set to 1 to patch old Swoole CLI refs to libsodium 1.0.21, default from profile: 1
-  PHPSFX_DISABLE_FPM_RUNTIME         Set to 1 to remove php-fpm sources/entry while keeping CLI web server, default from profile: 1
   PHPSFX_BCMATH_LEGACY_PROTOTYPES    Set to 1 to rewrite old PHP 8.1 bcmath K&R prototypes for modern clang, default from profile: 1
   PHPSFX_STRIP_BINARY                Set to 1 to strip debug symbols from release binary, default: 1
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
@@ -403,48 +402,6 @@ prime_swoole_extension_archive() {
 
 apply_profile_patches() {
   local enabled_file swoole_file curl_file libzip_file zlib_file redis_file oniguruma_file libsodium_file ext
-
-  if [[ "${PHPSFX_DISABLE_FPM_RUNTIME:-${PHPSFX_SFX_ONLY_RUNTIME:-0}}" == "1" ]]; then
-    python3 - "${SWOOLE_CLI_DIR}/sapi/cli/config.m4" "${SWOOLE_CLI_DIR}/sapi/cli/php_cli.c" <<'PY'
-from __future__ import annotations
-
-import re
-import sys
-from pathlib import Path
-
-config_path = Path(sys.argv[1])
-cli_path = Path(sys.argv[2])
-
-config = config_path.read_text(encoding="utf-8")
-config = config.replace(
-    "  PHP_ADD_BUILD_DIR(sapi/cli/fpm)\n  PHP_ADD_BUILD_DIR(sapi/cli/fpm/events)\n",
-    "",
-)
-config = re.sub(
-    r'  PHP_FPM_FILES="fpm/fpm\.c \\\n.*?\n  "\n',
-    '  PHP_FPM_FILES=""\n',
-    config,
-    flags=re.S,
-)
-config = config.replace(
-    "PHP_SELECT_CLI_SAPI(cli, program, $PHP_CLI_FILES $PHP_FPM_FILES $PHP_SFX_FILES $PHP_FPM_TRACE_FILES, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1, '$(SAPI_CLI_PATH)')",
-    "PHP_SELECT_CLI_SAPI(cli, program, $PHP_CLI_FILES $PHP_SFX_FILES, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -DSWOOLE_CLI_NO_FPM=1, '$(SAPI_CLI_PATH)')",
-)
-config_path.write_text(config, encoding="utf-8")
-
-cli = cli_path.read_text(encoding="utf-8")
-cli, fpm_case_count = re.subn(
-    r"case 'P':\s*return fpm_main\(argc, argv\);\s*default:",
-    "case 'P':\n#ifndef SWOOLE_CLI_NO_FPM\n\t\t\treturn fpm_main(argc, argv);\n#else\n\t\t\tphp_cli_usage(argv[0]);\n\t\t\treturn FAILURE;\n#endif\n\t\tdefault:",
-    cli,
-    count=1,
-)
-if fpm_case_count != 1:
-    raise RuntimeError("Unable to patch php-fpm -P entry in sapi/cli/php_cli.c")
-cli_path.write_text(cli, encoding="utf-8")
-PY
-    echo "Applied php-fpm disabled runtime profile" >&2
-  fi
 
   # Swoole CLI 上游默认启用 full profile；这里将默认启用列表改为 profile 明确声明的最小集合，
   # 防止 prepare.php 在解析依赖时下载 sqlite/intl/gd/imagick/mongodb 等未使用组件。
@@ -900,7 +857,6 @@ cat > "${DIST_DIR}/${META_NAME}" <<META
   "redis_disable_session": "${PHPSFX_REDIS_DISABLE_SESSION:-0}",
   "oniguruma_clang_compat": "${PHPSFX_ONIGURUMA_CLANG_COMPAT:-0}",
   "libsodium_stable_library": "${PHPSFX_LIBSODIUM_STABLE_LIBRARY:-0}",
-  "disable_fpm_runtime": "${PHPSFX_DISABLE_FPM_RUNTIME:-${PHPSFX_SFX_ONLY_RUNTIME:-0}}",
   "bcmath_legacy_prototypes": "${PHPSFX_BCMATH_LEGACY_PROTOTYPES:-0}",
   "strip_binary": "${STRIP_BINARY}",
   "swoole_cli_repo": "${SWOOLE_CLI_REPO}",
