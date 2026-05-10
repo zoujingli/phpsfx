@@ -64,7 +64,7 @@ Important environment variables:
   PHPSFX_PHP_VERSION                 PHP version prefix used for asset name and validation, default: 8.4
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
   PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.0.2.0 for PHP 8.1, v6.2.0.0 for PHP 8.4
-  PHPSFX_SWOOLE_CLI_CHECKOUT_MODE    auto, git, or archive. git uses a shallow tag/ref checkout; archive uses GitHub codeload tarball, default: auto
+  PHPSFX_SWOOLE_CLI_CHECKOUT_MODE    auto, git, or archive. git uses a shallow tag/ref checkout; archive uses GitHub API tarball, default: auto
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
   PHPSFX_SWOOLE_SRC_REF              Optional swoole-src tag/ref when upstream ref lacks sapi/SWOOLE-VERSION.conf
   PHPSFX_REQUIRED_EXTENSIONS         Comma-separated runtime extensions checked after build
@@ -161,16 +161,20 @@ strip_output_binary() {
 }
 
 download_swoole_cli_archive() {
-  local tmp_dir archive_url archive_file
+  local tmp_dir archive_url archive_file curl_headers
   tmp_dir="${SWOOLE_CLI_DIR}.archive.$$"
   archive_file="${ROOT_DIR}/.build/swoole-cli-${SWOOLE_CLI_REF//[^A-Za-z0-9._-]/_}.tar.gz"
-  archive_url="https://codeload.github.com/swoole/swoole-cli/tar.gz/${SWOOLE_CLI_REF}"
+  archive_url="${PHPSFX_SWOOLE_CLI_ARCHIVE_URL:-https://api.github.com/repos/swoole/swoole-cli/tarball/${SWOOLE_CLI_REF}}"
 
   require_command curl
   rm -rf "${tmp_dir}"
   mkdir -p "${tmp_dir}" "$(dirname "${archive_file}")"
-  echo "Git clone failed or unavailable, fallback to archive: ${archive_url}" >&2
-  retry_command curl -fL --retry 3 --retry-delay 2 -o "${archive_file}" "${archive_url}"
+  echo "Downloading Swoole CLI archive: ${archive_url}" >&2
+  curl_headers=(-H "Accept: application/vnd.github+json" -H "User-Agent: phpsfx")
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    curl_headers+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+  fi
+  retry_command curl -fL --retry 5 --retry-delay 2 --connect-timeout 30 --max-time 900 "${curl_headers[@]}" -o "${archive_file}" "${archive_url}"
   tar -xzf "${archive_file}" -C "${tmp_dir}" --strip-components=1
   rm -rf "${SWOOLE_CLI_DIR}"
   mv "${tmp_dir}" "${SWOOLE_CLI_DIR}"
