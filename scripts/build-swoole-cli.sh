@@ -64,7 +64,7 @@ Important environment variables:
   PHPSFX_PHP_VERSION                 PHP version prefix used for asset name and validation, default: 8.4
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
   PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.0.2.0 for PHP 8.1, v6.2.0.0 for PHP 8.4
-  PHPSFX_SWOOLE_CLI_CHECKOUT_MODE    auto or archive. archive uses GitHub codeload tarball, default: auto
+  PHPSFX_SWOOLE_CLI_CHECKOUT_MODE    auto, git, or archive. git uses a shallow tag/ref checkout; archive uses GitHub codeload tarball, default: auto
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
   PHPSFX_SWOOLE_SRC_REF              Optional swoole-src tag/ref when upstream ref lacks sapi/SWOOLE-VERSION.conf
   PHPSFX_REQUIRED_EXTENSIONS         Comma-separated runtime extensions checked after build
@@ -176,6 +176,38 @@ download_swoole_cli_archive() {
   mv "${tmp_dir}" "${SWOOLE_CLI_DIR}"
 }
 
+clone_swoole_cli_git() {
+  local tmp_dir
+  require_command git
+  tmp_dir="${SWOOLE_CLI_DIR}.git.$$"
+  rm -rf "${tmp_dir}"
+
+  # 默认发布 ref 都是 tag；先走 --branch + --depth=1，可避免完整仓库 checkout 在 macOS runner 上长时间卡住。
+  if retry_command git clone --depth=1 --single-branch --branch "${SWOOLE_CLI_REF}" "${SWOOLE_CLI_REPO}" "${tmp_dir}"; then
+    rm -rf "${SWOOLE_CLI_DIR}"
+    mv "${tmp_dir}" "${SWOOLE_CLI_DIR}"
+    return 0
+  fi
+
+  rm -rf "${tmp_dir}"
+  if retry_command git clone --filter=blob:none --no-checkout "${SWOOLE_CLI_REPO}" "${tmp_dir}"; then
+    cd "${tmp_dir}"
+    if retry_command git fetch --force --depth=1 origin "${SWOOLE_CLI_REF}"; then
+      git checkout --force FETCH_HEAD
+    else
+      retry_command git fetch --force --tags origin
+      git checkout --force "${SWOOLE_CLI_REF}"
+    fi
+    cd "${ROOT_DIR}"
+    rm -rf "${SWOOLE_CLI_DIR}"
+    mv "${tmp_dir}" "${SWOOLE_CLI_DIR}"
+    return 0
+  fi
+
+  rm -rf "${tmp_dir}"
+  return 1
+}
+
 checkout_swoole_cli() {
   local preserved_pool origin_url need_checkout
   mkdir -p "${DIST_DIR}" "$(dirname "${SWOOLE_CLI_DIR}")"
@@ -216,7 +248,7 @@ checkout_swoole_cli() {
       mv "${SWOOLE_CLI_DIR}/pool" "${preserved_pool}/pool"
     fi
     rm -rf "${SWOOLE_CLI_DIR}"
-    if ! retry_command git clone --filter=blob:none "${SWOOLE_CLI_REPO}" "${SWOOLE_CLI_DIR}"; then
+    if ! clone_swoole_cli_git; then
       download_swoole_cli_archive
     fi
     if [[ -n "${preserved_pool}" && -d "${preserved_pool}/pool" ]]; then

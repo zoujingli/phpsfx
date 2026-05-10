@@ -93,7 +93,7 @@ opcache,curl,iconv,bz2,bcmath,pcntl,filter,session,tokenizer,mbstring,ctype,zlib
 
 - macOS 构建使用 oniguruma 6.9.10 release tarball，以兼容新版 clang。
 - 老版本上游引用的 libsodium 下载地址不可用时，构建脚本统一使用 libsodium 1.0.21 release tarball。
-- CI 使用 Swoole CLI 源码 archive 下载模式，降低大仓库 checkout 在 macOS runner 上的失败概率。
+- CI 使用 Swoole CLI 浅克隆 tag/ref 模式，降低完整仓库 checkout 在 macOS runner 上的失败概率；本地仍可用 `PHPSFX_SWOOLE_CLI_CHECKOUT_MODE=archive` 选择源码包下载。
 
 ## 支持平台
 

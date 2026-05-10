@@ -138,7 +138,7 @@ jobs:
       PHPSFX_PHP_VERSION: ${{ matrix.php_version }}
       PHPSFX_SWOOLE_CLI_REF: ${{ matrix.swoole_cli_ref }}
       PHPSFX_SWOOLE_SRC_REF: ${{ matrix.swoole_src_ref }}
-      PHPSFX_SWOOLE_CLI_CHECKOUT_MODE: archive
+      PHPSFX_SWOOLE_CLI_CHECKOUT_MODE: git
       PHPSFX_DIST_DIR: ${{ github.workspace }}/dist
       PHPSFX_BUILD_JOBS: 2
 
