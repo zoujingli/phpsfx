@@ -345,11 +345,35 @@ prime_swoole_extension_archive() {
   fi
 
   if [[ ! -s "${tgz_file}" ]]; then
-    archive_url="https://codeload.github.com/swoole/swoole-src/tar.gz/${swoole_version}"
+    archive_url="${PHPSFX_SWOOLE_SRC_ARCHIVE_URL:-https://api.github.com/repos/swoole/swoole-src/tarball/${swoole_version}}"
     tmp_file="${tgz_file}.tmp.$$"
     echo "Bundled ext/swoole is empty, downloading swoole-src archive: ${archive_url}" >&2
     require_command curl
-    retry_command curl -fL --retry 3 --retry-delay 2 -o "${tmp_file}" "${archive_url}"
+    if ! retry_command curl --http1.1 -fsSL --retry 5 --retry-delay 2 --connect-timeout 30 --max-time 900 \
+      -H "Accept: application/vnd.github+json" -H "User-Agent: phpsfx" \
+      -o "${tmp_file}" "${archive_url}"; then
+      require_command php
+      echo "curl swoole-src download failed, fallback to PHP stream downloader" >&2
+      retry_command php -r '
+        $url = $argv[1];
+        $out = $argv[2];
+        $context = stream_context_create([
+            "http" => [
+                "method" => "GET",
+                "follow_location" => 1,
+                "max_redirects" => 10,
+                "timeout" => 900,
+                "header" => "Accept: application/vnd.github+json\r\nUser-Agent: phpsfx\r\n",
+            ],
+        ]);
+        $data = file_get_contents($url, false, $context);
+        if ($data === false || $data === "") {
+            fwrite(STDERR, "Unable to download archive: {$url}\n");
+            exit(1);
+        }
+        file_put_contents($out, $data);
+      ' "${archive_url}" "${tmp_file}"
+    fi
     gzip -t "${tmp_file}"
     mv "${tmp_file}" "${tgz_file}"
   fi
