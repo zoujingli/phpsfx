@@ -1,50 +1,39 @@
 # phpsfx
 
-`phpsfx` 用于自动构建和发布多平台 **Swoole CLI PHP 8.1 / 8.4 静态运行时**。产物用于把 PHP 源码或 Phar 追加进运行时后生成单文件可执行程序。
+`phpsfx` 是一个面向 PHP 单文件发布的 Swoole CLI 静态运行时构建仓库。它通过 GitHub Actions 自动编译、校验并发布可用于 SFX 打包的 `swoole-cli` 二进制文件，目标是让 PHP 源码入口或可执行 Phar 能与运行时合并为一个可直接分发的二进制程序。
 
-本分支已从 `micro.sfx` 切换为 `swoole-cli` 机制，核心格式为：
+本仓库只维护运行时本身，不绑定具体业务应用；业务项目可以在自己的构建流程中下载指定版本的运行时，再把 `payload.php` 或 `app.phar` 追加进去生成最终程序。
+
+## SFX 打包格式
+
+运行时使用 Swoole CLI 官方 SFX 格式：
 
 ```text
 swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 ```
 
-其中 `pack('J', payloadSize)` 是 Swoole CLI 官方 SFX 读取逻辑需要的 8 字节长度尾部（与官方 `pack-sfx.php` 保持一致）。相比 `micro.sfx`，该方式直接复用 Swoole CLI 的 SFX 读取逻辑。
+- `swoole-cli`：本仓库发布的静态 PHP 运行时。
+- `payload.php`：单文件 PHP 入口，适合脚本、工具或已经自包含的入口文件。
+- `app.phar`：可执行 Phar，适合多文件应用和框架项目。
+- `pack('J', payloadSize)`：追加在文件末尾的 8 字节 payload 长度，Swoole CLI SFX 入口通过它定位并加载 payload。
 
-运行已打包产物时需要传入 `--self`，例如 `./app --self list`。这是 Swoole CLI 官方 SFX 模式的入口开关。
+执行打包后的程序时需要通过 `--self` 启动内置 payload，例如：
+
+```bash
+./app --self
+./app --self list
+./app --self start
+```
 
 ## Release 产物
 
-默认同时发布两个 PHP 版本、两个组件 profile，并按官方平台族规划 Linux / macOS / Windows(CygWin)；当前 Linux/macOS 生成资产，未实现的平台自动跳过。资产命名格式：
+默认发布两个 PHP 版本、两个组件 profile、四个 Linux/macOS 平台，资产命名格式如下：
 
 ```text
 swoole-cli-php{php_version}-{profile}-{platform}
 ```
 
-PHP 版本映射：
-
-| PHP | Swoole CLI ref |
-|-----|----------------|
-| 8.4.x | `v6.2.0.0` |
-| 8.1.x | `v6.0.2.0` |
-
-组件 profile：
-
-| profile | 组件集合 |
-|---------|----------|
-| `min` | `bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,mysqlnd,openssl,pcntl,pdo,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib` |
-| `max` | Swoole CLI 官方默认组件：`opcache,curl,iconv,bz2,bcmath,pcntl,filter,session,tokenizer,mbstring,ctype,zlib,zip,posix,sockets,pdo,sqlite3,phar,mysqlnd,mysqli,intl,fileinfo,pdo_mysql,soap,xsl,gmp,exif,sodium,openssl,readline,xml,gd,redis,swoole,yaml,imagick,mongodb,xlswriter,gettext` |
-
-平台：
-
-| 平台族 | platform | 状态 |
-|--------|----------|------|
-| Linux x86_64 | `linux-x64` | 发布 |
-| Linux ARM64 | `linux-a64` | 发布 |
-| macOS x86_64 | `macos-x64` | 发布 |
-| macOS ARM64 | `macos-a64` | 发布 |
-| Windows CygWin x86_64 | `cygwin-x64` | 暂未实现，CI 自动跳过 |
-
-示例资产：
+示例：
 
 ```text
 swoole-cli-php8.4-min-linux-x64
@@ -55,24 +44,67 @@ swoole-cli-php8.1-max-linux-x64
 
 同时发布：
 
-- `SHA256SUMS`
-- `build-meta.json`
+- `SHA256SUMS`：所有运行时资产的 SHA-256 校验值。
+- `build-meta.json`：构建版本、组件 profile、平台、上游 ref、裁剪开关和构建时间等元数据。
 
-Windows CygWin 平台已进入发布矩阵，但当前构建链路暂未实现，CI 会自动跳过，不生成 Release 资产。
+## PHP 与 Swoole CLI 版本
 
-## 组件裁剪说明
+| PHP 版本线 | 默认 Swoole CLI ref | Swoole 源码说明 |
+|------------|---------------------|-----------------|
+| `8.4.x` | `v6.2.0.0` | 使用上游 ref 内置配置 |
+| `8.1.x` | `v6.0.2.0` | 使用 `swoole-src v6.0.2` |
 
-`min` 额外裁剪：
+手动运行 workflow 时可以指定单个 PHP 版本并覆盖 `swoole_cli_ref`，用于验证上游新标签或指定提交。
 
-- Swoole 扩展：不启用 `pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd` 等可选功能。
-- libcurl：保留 HTTP(S)、OpenSSL、zlib、c-ares，不启用 HTTP3、SSH2、IDN、PSL、Brotli、Zstd。
-- libzip：保留 Zip + zlib + OpenSSL，不启用 BZip2、LZMA、Zstd。
-- zlib：移除上游模板中与 zlib 构建无关的 BZip2 依赖。
-- redis：关闭 redis session 支持，因为该 profile 不打包 PHP `session` 扩展。
+## 组件 profile
 
-`max` 不裁剪官方默认组件和依赖能力。
+### `min`
 
-所有 profile 都启用 SFX-only 运行时裁剪：保留 CLI/SFX 必要入口，移除 php-fpm 与 CLI 内置 Web Server 代码路径；macOS 构建时使用 oniguruma 6.9.10 release tarball，以兼容新版 clang。
+`min` 是较小的运行时集合，适合只需要 CLI/SFX、Swoole 服务、常见数据库和基础网络能力的应用。包含组件：
+
+```text
+bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,mysqlnd,openssl,pcntl,pdo,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib
+```
+
+`min` 的依赖裁剪策略：
+
+- Swoole 扩展保留 HTTP/TCP/WebSocket server、coroutine、mysqlnd、curl hook 和 c-ares DNS 能力。
+- Swoole 扩展不启用 `pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd` 等可选功能。
+- libcurl 保留 HTTP(S)、OpenSSL、zlib、c-ares，不启用 HTTP3、SSH2、IDN、PSL、Brotli、Zstd。
+- libzip 保留 Zip + zlib + OpenSSL，不启用 BZip2、LZMA、Zstd。
+- zlib 移除上游模板中与 zlib 构建无关的 BZip2 依赖。
+- redis 关闭 session 支持，因为该 profile 不包含 PHP `session` 扩展。
+
+### `max`
+
+`max` 使用 Swoole CLI 官方默认组件集合，适合需要更完整扩展覆盖面的场景。包含组件：
+
+```text
+opcache,curl,iconv,bz2,bcmath,pcntl,filter,session,tokenizer,mbstring,ctype,zlib,zip,posix,sockets,pdo,sqlite3,phar,mysqlnd,mysqli,intl,fileinfo,pdo_mysql,soap,xsl,gmp,exif,sodium,openssl,readline,xml,gd,redis,swoole,yaml,imagick,mongodb,xlswriter,gettext
+```
+
+`max` 不裁剪官方默认扩展和依赖能力。
+
+## 运行时裁剪
+
+所有 profile 默认移除 php-fpm 源码和 `-P` 入口，只保留 CLI/SFX 相关能力。CLI 内置 Web Server 相关代码保留，避免过度修改上游 CLI 入口造成兼容风险。
+
+其他兼容性处理：
+
+- macOS 构建使用 oniguruma 6.9.10 release tarball，以兼容新版 clang。
+- 老版本上游引用的 libsodium 下载地址不可用时，构建脚本统一使用 libsodium 1.0.21 release tarball。
+- CI 使用 Swoole CLI 源码 archive 下载模式，降低大仓库 checkout 在 macOS runner 上的失败概率。
+
+## 支持平台
+
+| 系统 | 架构 | platform | Release |
+|------|------|----------|---------|
+| Linux | x86_64 | `linux-x64` | 是 |
+| Linux | ARM64 | `linux-a64` | 是 |
+| macOS | x86_64 | `macos-x64` | 是 |
+| macOS | ARM64 | `macos-a64` | 是 |
+
+暂不发布 Windows / CygWin 产物。
 
 ## 自动发布
 
@@ -80,31 +112,25 @@ GitHub Actions workflow：`.github/workflows/release.yml`。
 
 触发方式：
 
-- 推送 `v*` 标签：自动构建所有已实现的 PHP/profile/platform 组合并创建 GitHub Release；未实现平台自动跳过。
+- 推送 `v*` 标签：构建全部 Linux/macOS、PHP 版本和 profile 组合，并创建 GitHub Release。
 - 手动运行 `Release swoole-cli`：可输入 `version`、`php_version`、`profile`、`swoole_cli_ref`、`prepare_flags`。
 
-示例：
+发版示例：
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-默认上游源码：
-
-```text
-https://github.com/swoole/swoole-cli.git
-```
-
 手动运行 workflow 时：
 
 - `php_version=all` 同时构建 PHP 8.1 与 8.4。
 - `profile=all` 同时构建 `min/max`。
-- 如需覆盖上游 ref，请选择单个 PHP 版本再填写 `swoole_cli_ref`。
+- 覆盖 `swoole_cli_ref` 时必须选择单个 PHP 版本，避免同一个 ref 同时套用到不同 PHP 版本线。
 
-## 本地 / WSL 调试
+## 本地 / WSL 构建
 
-WSL 或 Linux x86_64 本地只构建当前平台：
+Linux x86_64 或 WSL 可直接构建当前平台产物：
 
 ```bash
 cd /mnt/d/WebRoot/phpsfx
@@ -120,17 +146,31 @@ PHPSFX_PROFILE=max \
   bash scripts/build-swoole-cli.sh
 ```
 
-构建完成后输出到 `dist/`。
+构建输出位于 `dist/`。
+
+常用环境变量：
+
+| 变量 | 说明 |
+|------|------|
+| `PHPSFX_PLATFORM` | 目标平台，例如 `linux-x64`。 |
+| `PHPSFX_PHP_VERSION` | PHP 版本线，默认 `8.4`。 |
+| `PHPSFX_PROFILE` | 组件 profile，默认 `min`。 |
+| `PHPSFX_SWOOLE_CLI_REF` | Swoole CLI 分支、标签或提交。 |
+| `PHPSFX_SWOOLE_SRC_REF` | 可选 swoole-src ref，主要用于 PHP 8.1 版本线。 |
+| `PHPSFX_SWOOLE_CLI_PREPARE_FLAGS` | 传给上游 `prepare.php` 的扩展开关。 |
+| `PHPSFX_DISABLE_FPM_RUNTIME` | 是否移除 php-fpm 入口，profile 默认启用。 |
+| `PHPSFX_STRIP_BINARY` | 是否 strip 二进制，默认启用。 |
 
 ## 运行时校验
 
-构建脚本会直接执行生成的 `swoole-cli`，并校验：
+构建脚本会直接执行生成的 `swoole-cli` 并校验：
 
 - `PHP_VERSION` 以目标版本前缀开头。
 - `PHP_SAPI === "cli"`。
 - `SWOOLE_CLI` 常量存在。
-- profile 声明的必需扩展已加载。
-- profile 声明的排除扩展未被打包。
+- 当前 profile 声明的必需扩展全部已加载。
+- 当前 profile 声明的排除扩展没有被打包。
+- 二进制文件具备可执行权限。
 
 手动校验已有产物：
 
@@ -142,12 +182,14 @@ PHPSFX_EXPECTED_PHP_PREFIX=8.4. \
 
 ## 下载 Release 运行时
 
+下载最新版本：
+
 ```bash
 PHPSFX_PHP_VERSION=8.4 PHPSFX_PROFILE=min \
   bash scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
 ```
 
-也可指定版本：
+下载指定版本：
 
 ```bash
 PHPSFX_PHP_VERSION=8.1 PHPSFX_PROFILE=max \
@@ -207,7 +249,7 @@ chmod +x build/app
 约束：
 
 - `app.phar` 必须自带可执行 Phar stub。
-- 运行时读取外部配置、日志、上传目录、数据库快照等资源时，仍应按应用自己的 Phar 运行规则放在二进制同级或指定路径。
+- 运行时读取外部配置、日志、上传目录、数据库快照等资源时，应按应用自己的 Phar 运行规则放在二进制同级或指定路径。
 - 脚本兼容 `.bin` 这类自定义 Phar 后缀，会先复制为临时 `.phar` 做轻量校验。
 
 ## 打包实现自测

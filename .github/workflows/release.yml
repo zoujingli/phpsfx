@@ -71,11 +71,10 @@ jobs:
           from pathlib import Path
 
           platforms = [
-              {"platform": "linux-x64", "runner": "ubuntu-latest", "supported": True},
-              {"platform": "linux-a64", "runner": "ubuntu-24.04-arm", "supported": True},
-              {"platform": "macos-x64", "runner": "macos-15-intel", "supported": True},
-              {"platform": "macos-a64", "runner": "macos-15", "supported": True},
-              {"platform": "cygwin-x64", "runner": "windows-latest", "supported": False},
+              {"platform": "linux-x64", "runner": "ubuntu-latest"},
+              {"platform": "linux-a64", "runner": "ubuntu-24.04-arm"},
+              {"platform": "macos-x64", "runner": "macos-15-intel"},
+              {"platform": "macos-a64", "runner": "macos-15"},
           ]
           defaults = {
               "8.4": {"swoole_cli_ref": "v6.2.0.0", "swoole_src_ref": ""},
@@ -113,7 +112,6 @@ jobs:
                           "profile": profile,
                           "platform": item["platform"],
                           "runner": item["runner"],
-                          "supported": item["supported"],
                       })
 
           matrix = json.dumps({"include": include}, separators=(",", ":"))
@@ -145,17 +143,11 @@ jobs:
       PHPSFX_BUILD_JOBS: 2
 
     steps:
-      - name: Skip unsupported platform
-        if: ${{ ! matrix.supported }}
-        run: |
-          echo "Platform ${{ matrix.platform }} is part of the official platform family but is not implemented in phpsfx yet; skip it."
-
       - name: Checkout phpsfx
-        if: ${{ matrix.supported }}
         uses: actions/checkout@v4
 
       - name: Install Linux build dependencies
-        if: ${{ matrix.supported && runner.os == 'Linux' }}
+        if: ${{ runner.os == 'Linux' }}
         run: |
           set -eux
           sudo apt-get update
@@ -165,14 +157,13 @@ jobs:
             ninja-build p7zip-full pkg-config python3 python3-pip re2c tar unzip wget xz-utils yasm zip
 
       - name: Install macOS build dependencies
-        if: ${{ matrix.supported && runner.os == 'macOS' }}
+        if: ${{ runner.os == 'macOS' }}
         run: |
           set -eux
           brew update
           brew install autoconf automake bison cmake coreutils flex gettext libtool meson nasm ninja pkg-config re2c xz yasm || true
 
       - name: Setup PHP
-        if: ${{ matrix.supported }}
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php_version }}
@@ -182,7 +173,6 @@ jobs:
           ini-values: memory_limit=-1, phar.readonly=0
 
       - name: Cache Swoole CLI dependency sources
-        if: ${{ matrix.supported }}
         uses: actions/cache@v4
         with:
           path: .build/swoole-cli/pool
@@ -192,7 +182,6 @@ jobs:
             phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-php${{ matrix.php_version }}-${{ matrix.profile }}-
 
       - name: Show environment
-        if: ${{ matrix.supported }}
         run: |
           set -eux
           uname -a
@@ -205,7 +194,6 @@ jobs:
           echo "PHPSFX_SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF}"
 
       - name: Build and validate swoole-cli
-        if: ${{ matrix.supported }}
         env:
           PHPSFX_SWOOLE_CLI_PREPARE_FLAGS: ${{ github.event.inputs.prepare_flags }}
         run: |
@@ -234,7 +222,6 @@ jobs:
           fi
 
       - name: Test PHP and Phar SFX packaging
-        if: ${{ matrix.supported }}
         run: |
           bash scripts/test-packaging.sh "dist/swoole-cli-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}"
 
@@ -250,7 +237,6 @@ jobs:
             build-php${{ matrix.php_version }}-${{ matrix.profile }}-${{ matrix.platform }}-summary.log
 
       - name: Upload platform artifact
-        if: ${{ matrix.supported }}
         uses: actions/upload-artifact@v4
         with:
           name: swoole-cli-php${{ matrix.php_version }}-${{ matrix.profile }}-${{ matrix.platform }}

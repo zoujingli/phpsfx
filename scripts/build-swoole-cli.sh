@@ -80,7 +80,7 @@ Important environment variables:
   PHPSFX_REDIS_DISABLE_SESSION       Set to 1 to build redis without session hooks, default from profile: 1
   PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
   PHPSFX_LIBSODIUM_STABLE_LIBRARY    Set to 1 to patch old Swoole CLI refs to libsodium 1.0.21, default from profile: 1
-  PHPSFX_SFX_ONLY_RUNTIME            Set to 1 to remove php-fpm and built-in CLI web server, default from profile: 1
+  PHPSFX_DISABLE_FPM_RUNTIME         Set to 1 to remove php-fpm sources/entry while keeping CLI web server, default from profile: 1
   PHPSFX_STRIP_BINARY                Set to 1 to strip debug symbols from release binary, default: 1
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
   PHPSFX_DOWNLOAD_MIRROR_URL         Optional Swoole CLI dependency mirror URL passed to prepare.php
@@ -319,7 +319,7 @@ prime_swoole_extension_archive() {
 apply_profile_patches() {
   local enabled_file swoole_file curl_file libzip_file zlib_file redis_file oniguruma_file libsodium_file ext
 
-  if [[ "${PHPSFX_SFX_ONLY_RUNTIME:-0}" == "1" ]]; then
+  if [[ "${PHPSFX_DISABLE_FPM_RUNTIME:-${PHPSFX_SFX_ONLY_RUNTIME:-0}}" == "1" ]]; then
     python3 - "${SWOOLE_CLI_DIR}/sapi/cli/config.m4" "${SWOOLE_CLI_DIR}/sapi/cli/php_cli.c" <<'PY'
 from __future__ import annotations
 
@@ -336,11 +336,6 @@ config = config.replace(
     "",
 )
 config = re.sub(
-    r'  PHP_CLI_FILES="php_cli\.c \\\n\s*ps_title\.c \\\n\s*patch\.c \\\n\s*php_cli_process_title\.c \\\n\s*php_cli_server\.c \\\n\s*php_http_parser\.c"',
-    '  PHP_CLI_FILES="php_cli.c \\\n    ps_title.c \\\n    patch.c \\\n    php_cli_process_title.c"',
-    config,
-)
-config = re.sub(
     r'  PHP_FPM_FILES="fpm/fpm\.c \\\n.*?\n  "\n',
     '  PHP_FPM_FILES=""\n',
     config,
@@ -348,30 +343,18 @@ config = re.sub(
 )
 config = config.replace(
     "PHP_SELECT_CLI_SAPI(cli, program, $PHP_CLI_FILES $PHP_FPM_FILES $PHP_SFX_FILES $PHP_FPM_TRACE_FILES, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1, '$(SAPI_CLI_PATH)')",
-    "PHP_SELECT_CLI_SAPI(cli, program, $PHP_CLI_FILES $PHP_SFX_FILES, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -DSWOOLE_CLI_SFX_ONLY=1, '$(SAPI_CLI_PATH)')",
+    "PHP_SELECT_CLI_SAPI(cli, program, $PHP_CLI_FILES $PHP_SFX_FILES, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -DSWOOLE_CLI_NO_FPM=1, '$(SAPI_CLI_PATH)')",
 )
 config_path.write_text(config, encoding="utf-8")
 
 cli = cli_path.read_text(encoding="utf-8")
 cli = cli.replace(
     "\tcase 'P':\n\t\t\treturn fpm_main(argc, argv);\n\t\tdefault:",
-    "\tcase 'P':\n#ifndef SWOOLE_CLI_SFX_ONLY\n\t\t\treturn fpm_main(argc, argv);\n#else\n\t\t\tphp_cli_usage(argv[0]);\n\t\t\treturn FAILURE;\n#endif\n\t\tdefault:",
-)
-cli = cli.replace(
-    "\t\t\tcase 'U': /* self update */\n\t\t\t\tif (php_request_startup() == FAILURE) {\n\t\t\t\t    goto err;\n\t\t\t\t}\n\t\t\t\trequest_started = 1;\n\t\t\t\tswoole_cli_self_update();\n\t\t\t\tphp_output_end_all();\n\t\t\t\tEG(exit_status) = 0;\n\t\t\t\tgoto out;\n",
-    "#ifndef SWOOLE_CLI_SFX_ONLY\n\t\t\tcase 'U': /* self update */\n\t\t\t\tif (php_request_startup() == FAILURE) {\n\t\t\t\t    goto err;\n\t\t\t\t}\n\t\t\t\trequest_started = 1;\n\t\t\t\tswoole_cli_self_update();\n\t\t\t\tphp_output_end_all();\n\t\t\t\tEG(exit_status) = 0;\n\t\t\t\tgoto out;\n#endif\n",
-)
-cli = cli.replace(
-    "#ifndef PHP_CLI_WIN32_NO_CONSOLE\n\t\t\tcase 'S':\n\t\t\t\tsapi_module = &cli_server_sapi_module;\n\t\t\t\tcli_server_sapi_module.additional_functions = server_additional_functions;\n\t\t\t\tbreak;\n#endif",
-    "#if !defined(PHP_CLI_WIN32_NO_CONSOLE) && !defined(SWOOLE_CLI_SFX_ONLY)\n\t\t\tcase 'S':\n\t\t\t\tsapi_module = &cli_server_sapi_module;\n\t\t\t\tcli_server_sapi_module.additional_functions = server_additional_functions;\n\t\t\t\tbreak;\n#endif",
-)
-cli = cli.replace(
-    "#ifndef PHP_CLI_WIN32_NO_CONSOLE\n\t\tif (sapi_module == &cli_sapi_module) {\n#endif\n\t\t\texit_status = do_cli(argc, argv);\n#ifndef PHP_CLI_WIN32_NO_CONSOLE\n\t\t} else {\n\t\t\texit_status = do_cli_server(argc, argv);\n\t\t}\n#endif",
-    "#if !defined(PHP_CLI_WIN32_NO_CONSOLE) && !defined(SWOOLE_CLI_SFX_ONLY)\n\t\tif (sapi_module == &cli_sapi_module) {\n#endif\n\t\t\texit_status = do_cli(argc, argv);\n#if !defined(PHP_CLI_WIN32_NO_CONSOLE) && !defined(SWOOLE_CLI_SFX_ONLY)\n\t\t} else {\n\t\t\texit_status = do_cli_server(argc, argv);\n\t\t}\n#endif",
+    "\tcase 'P':\n#ifndef SWOOLE_CLI_NO_FPM\n\t\t\treturn fpm_main(argc, argv);\n#else\n\t\t\tphp_cli_usage(argv[0]);\n\t\t\treturn FAILURE;\n#endif\n\t\tdefault:",
 )
 cli_path.write_text(cli, encoding="utf-8")
 PY
-    echo "Applied SFX-only runtime profile" >&2
+    echo "Applied php-fpm disabled runtime profile" >&2
   fi
 
   # Swoole CLI 上游默认启用 full profile；这里将默认启用列表改为 profile 明确声明的最小集合，
@@ -762,7 +745,7 @@ cat > "${DIST_DIR}/${META_NAME}" <<META
   "redis_disable_session": "${PHPSFX_REDIS_DISABLE_SESSION:-0}",
   "oniguruma_clang_compat": "${PHPSFX_ONIGURUMA_CLANG_COMPAT:-0}",
   "libsodium_stable_library": "${PHPSFX_LIBSODIUM_STABLE_LIBRARY:-0}",
-  "sfx_only_runtime": "${PHPSFX_SFX_ONLY_RUNTIME:-0}",
+  "disable_fpm_runtime": "${PHPSFX_DISABLE_FPM_RUNTIME:-${PHPSFX_SFX_ONLY_RUNTIME:-0}}",
   "strip_binary": "${STRIP_BINARY}",
   "swoole_cli_repo": "${SWOOLE_CLI_REPO}",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
