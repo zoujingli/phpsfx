@@ -93,6 +93,15 @@ jobs:
           extensions: curl, openssl, mbstring, phar, zip
           ini-values: memory_limit=-1, phar.readonly=0
 
+      - name: Cache Swoole CLI dependency sources
+        uses: actions/cache@v4
+        with:
+          path: .build/swoole-cli/pool
+          key: phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-${{ hashFiles('scripts/profiles/hyperfadmin-slim.env') }}
+          restore-keys: |
+            phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-
+            phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Show environment
         run: |
           set -eux
@@ -115,7 +124,13 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           if [ "${status}" -ne 0 ]; then
-            grep -Ein 'fatal error|[^A-Za-z]error:|failed|killed|No such|make(\\[[0-9]+\\])?: \\*\\*\\*' "build-${PHPSFX_PLATFORM}.log" | tail -80 > "build-${PHPSFX_PLATFORM}-summary.log" || true
+            {
+              echo "== matched errors =="
+              grep -Ein 'fatal error|[^A-Za-z]error:|undefined reference|failed|killed|No such|cannot find|not found|make(\\[[0-9]+\\])?: \\*\\*\\*' "build-${PHPSFX_PLATFORM}.log" | tail -140 || true
+              echo
+              echo "== build log tail =="
+              tail -240 "build-${PHPSFX_PLATFORM}.log"
+            } > "build-${PHPSFX_PLATFORM}-summary.log"
             if [ ! -s "build-${PHPSFX_PLATFORM}-summary.log" ]; then
               tail -120 "build-${PHPSFX_PLATFORM}.log" > "build-${PHPSFX_PLATFORM}-summary.log"
             fi

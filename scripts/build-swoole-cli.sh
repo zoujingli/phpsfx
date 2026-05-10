@@ -124,11 +124,22 @@ download_swoole_cli_archive() {
 }
 
 checkout_swoole_cli() {
+  local preserved_pool
   mkdir -p "${DIST_DIR}" "$(dirname "${SWOOLE_CLI_DIR}")"
   if [[ ! -d "${SWOOLE_CLI_DIR}/.git" && ! -f "${SWOOLE_CLI_DIR}/prepare.php" ]]; then
+    preserved_pool=""
+    if [[ -d "${SWOOLE_CLI_DIR}/pool" ]]; then
+      preserved_pool=$(mktemp -d)
+      mv "${SWOOLE_CLI_DIR}/pool" "${preserved_pool}/pool"
+    fi
     rm -rf "${SWOOLE_CLI_DIR}"
     if ! retry_command git clone --filter=blob:none "${SWOOLE_CLI_REPO}" "${SWOOLE_CLI_DIR}"; then
       download_swoole_cli_archive
+    fi
+    if [[ -n "${preserved_pool}" && -d "${preserved_pool}/pool" ]]; then
+      rm -rf "${SWOOLE_CLI_DIR}/pool"
+      mv "${preserved_pool}/pool" "${SWOOLE_CLI_DIR}/pool"
+      rmdir "${preserved_pool}" 2>/dev/null || true
     fi
   fi
 
@@ -160,26 +171,60 @@ ERROR
 }
 
 prime_swoole_extension_archive() {
-  local swoole_version tgz_file archive_url
+  local swoole_version tgz_file archive_url tmp_file first_entry helper_script helper_tmp
   swoole_version=$(tr -d '[:space:]' < sapi/SWOOLE-VERSION.conf)
   tgz_file="${SWOOLE_CLI_DIR}/pool/ext/swoole-${swoole_version}.tgz"
-  if [[ -s "${tgz_file}" ]]; then
-    return 0
-  fi
 
   # 上游 download-swoole-src-archive.sh 在部分 runner 上会被 sh 执行，导致 [[ 语法失败后重新 clone swoole-src。
-  # 这里提前生成 prepare.php 期望的 tgz，避免发布构建依赖额外 git clone；archive checkout 的 ext/swoole
-  # 可能是空子模块目录，因此缺少源码时改用 codeload tarball。
-  mkdir -p "$(dirname "${tgz_file}")"
-  if [[ -f "${SWOOLE_CLI_DIR}/ext/swoole/CMakeLists.txt" ]]; then
-    tar -czf "${tgz_file}" -C "${SWOOLE_CLI_DIR}/ext/swoole" .
-    return 0
+  # 这里提前生成 prepare.php 期望的 tgz，并主动展开 ext/swoole，避免 archive checkout 的空子模块目录
+  # 让 prepare.php 误判“源码目录已存在”而跳过下载，最终在 PHP 扩展编译阶段才失败。
+  helper_script="${SWOOLE_CLI_DIR}/sapi/scripts/download-swoole-src-archive.sh"
+  if [[ -f "${helper_script}" ]] && ! head -1 "${helper_script}" | grep -q '^#!'; then
+    helper_tmp="${helper_script}.tmp.$$"
+    {
+      printf '%s\n' '#!/usr/bin/env bash'
+      cat "${helper_script}"
+    } > "${helper_tmp}"
+    mv "${helper_tmp}" "${helper_script}"
+    chmod +x "${helper_script}"
   fi
 
-  archive_url="https://codeload.github.com/swoole/swoole-src/tar.gz/${swoole_version}"
-  echo "Bundled ext/swoole is empty, downloading swoole-src archive: ${archive_url}" >&2
-  require_command curl
-  retry_command curl -fL --retry 3 --retry-delay 2 -o "${tgz_file}" "${archive_url}"
+  mkdir -p "$(dirname "${tgz_file}")"
+  if [[ ! -s "${tgz_file}" && -f "${SWOOLE_CLI_DIR}/ext/swoole/CMakeLists.txt" ]]; then
+    echo "Priming swoole-src archive from checked-out submodule: ${tgz_file}" >&2
+    tar -czf "${tgz_file}" -C "${SWOOLE_CLI_DIR}/ext/swoole" .
+  fi
+
+  if [[ ! -s "${tgz_file}" ]]; then
+    archive_url="https://codeload.github.com/swoole/swoole-src/tar.gz/${swoole_version}"
+    tmp_file="${tgz_file}.tmp.$$"
+    echo "Bundled ext/swoole is empty, downloading swoole-src archive: ${archive_url}" >&2
+    require_command curl
+    retry_command curl -fL --retry 3 --retry-delay 2 -o "${tmp_file}" "${archive_url}"
+    gzip -t "${tmp_file}"
+    mv "${tmp_file}" "${tgz_file}"
+  fi
+
+  # git archive fallback 场景下 ext/swoole 常是空目录；Swoole CLI prepare.php 只判断目录是否存在，
+  # 因此这里强制确保源码已经展开。codeload 归档包含顶层目录，官方脚本也使用 strip-components=1。
+  if [[ ! -f "${SWOOLE_CLI_DIR}/ext/swoole/CMakeLists.txt" ]]; then
+    echo "Expanding swoole-src ${swoole_version} into ${SWOOLE_CLI_DIR}/ext/swoole" >&2
+    rm -rf "${SWOOLE_CLI_DIR}/ext/swoole"
+    mkdir -p "${SWOOLE_CLI_DIR}/ext/swoole"
+    first_entry=$(tar -tzf "${tgz_file}" | awk 'NR == 1 { print; found = 1 } END { exit found ? 0 : 1 }')
+    if [[ "${first_entry}" == */* ]]; then
+      tar --strip-components=1 -C "${SWOOLE_CLI_DIR}/ext/swoole" -xzf "${tgz_file}"
+    else
+      tar -C "${SWOOLE_CLI_DIR}/ext/swoole" -xzf "${tgz_file}"
+    fi
+  fi
+
+  if [[ ! -f "${SWOOLE_CLI_DIR}/ext/swoole/CMakeLists.txt" ]]; then
+    echo "swoole-src archive is invalid or incomplete: ${tgz_file}" >&2
+    tar -tzf "${tgz_file}" | head -20 >&2 || true
+    exit 1
+  fi
+  echo "Prepared swoole-src ${swoole_version}: ${tgz_file}" >&2
 }
 
 if [[ -z "${PLATFORM}" ]]; then
