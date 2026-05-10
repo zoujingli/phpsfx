@@ -9,6 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+def env_or_default(name: str, default: str) -> str:
+    value = os.getenv(name)
+    return value if value not in (None, "") else default
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("Usage: scripts/merge-build-meta.py <dist-dir> <output-json>", file=sys.stderr)
@@ -25,11 +30,15 @@ def main() -> int:
         print(f"No build-meta-*.json files found in {dist}", file=sys.stderr)
         return 1
 
+    first = platforms[0]
     payload = {
-        "version": os.getenv("PHPSFX_RELEASE_VERSION", ""),
-        "php_version": os.getenv("PHPSFX_PHP_VERSION", platforms[0].get("php_version", "")),
-        "spc_ref": os.getenv("PHPSFX_SPC_REF", platforms[0].get("spc_ref", "")),
-        "extensions": os.getenv("PHPSFX_EXTENSIONS", platforms[0].get("extensions", "")),
+        "version": env_or_default("PHPSFX_RELEASE_VERSION", ""),
+        "runtime": "swoole-cli",
+        "sfx_format": "swoole-cli + payload + pack('J', payloadSize)",
+        "php_version": env_or_default("PHPSFX_PHP_VERSION", first.get("php_version", "")),
+        "swoole_cli_ref": env_or_default("PHPSFX_SWOOLE_CLI_REF", first.get("swoole_cli_ref", "")),
+        "extensions": env_or_default("PHPSFX_EXTENSIONS", first.get("extensions", "")),
+        "prepare_flags": env_or_default("PHPSFX_SWOOLE_CLI_PREPARE_FLAGS", first.get("prepare_flags", "")),
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "platforms": platforms,
     }
