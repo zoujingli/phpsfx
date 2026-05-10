@@ -172,7 +172,33 @@ download_swoole_cli_archive() {
   echo "Downloading Swoole CLI archive: ${archive_url}" >&2
   # 读取公开上游源码包不使用当前仓库 GITHUB_TOKEN，避免 token 作用域/跨仓库策略导致 API tarball 302/403 异常。
   curl_headers=(-H "Accept: application/vnd.github+json" -H "User-Agent: phpsfx")
-  retry_command curl -fL --retry 5 --retry-delay 2 --connect-timeout 30 --max-time 900 "${curl_headers[@]}" -o "${archive_file}" "${archive_url}"
+  if ! retry_command curl --http1.1 -fsSL --retry 5 --retry-delay 2 --connect-timeout 30 --max-time 900 "${curl_headers[@]}" -o "${archive_file}" "${archive_url}"; then
+    require_command php
+    echo "curl archive download failed, fallback to PHP stream downloader" >&2
+    retry_command php -r '
+      $url = $argv[1];
+      $out = $argv[2];
+      $context = stream_context_create([
+          "http" => [
+              "method" => "GET",
+              "follow_location" => 1,
+              "max_redirects" => 10,
+              "timeout" => 900,
+              "header" => "Accept: application/vnd.github+json\r\nUser-Agent: phpsfx\r\n",
+          ],
+      ]);
+      $data = file_get_contents($url, false, $context);
+      if ($data === false || $data === "") {
+          fwrite(STDERR, "Unable to download archive: {$url}\n");
+          exit(1);
+      }
+      file_put_contents($out, $data);
+    ' "${archive_url}" "${archive_file}"
+  fi
+  if [[ ! -s "${archive_file}" ]]; then
+    echo "Downloaded archive is empty: ${archive_file}" >&2
+    exit 1
+  fi
   tar -xzf "${archive_file}" -C "${tmp_dir}" --strip-components=1
   rm -rf "${SWOOLE_CLI_DIR}"
   mv "${tmp_dir}" "${SWOOLE_CLI_DIR}"
