@@ -93,6 +93,7 @@ opcache,curl,iconv,bz2,bcmath,pcntl,filter,session,tokenizer,mbstring,ctype,zlib
 
 - macOS 构建使用 oniguruma 6.9.10 release tarball，以兼容新版 clang。
 - 老版本上游引用的 libsodium 下载地址不可用时，构建脚本统一使用 libsodium 1.0.21 release tarball。
+- PHP 8.1 旧版 bcmath 源码仍包含 K&R 函数原型，构建脚本会转换为现代 C 原型以兼容新版 clang。
 - CI 使用 GitHub API tarball 获取 Swoole CLI 源码，避免完整仓库 checkout 在 macOS runner 上长时间卡住；本地仍可用 `PHPSFX_SWOOLE_CLI_CHECKOUT_MODE=git` 选择浅克隆 tag/ref。
 
 ## 支持平台
@@ -159,6 +160,7 @@ PHPSFX_PROFILE=max \
 | `PHPSFX_SWOOLE_SRC_REF` | 可选 swoole-src ref，主要用于 PHP 8.1 版本线。 |
 | `PHPSFX_SWOOLE_CLI_PREPARE_FLAGS` | 传给上游 `prepare.php` 的扩展开关。 |
 | `PHPSFX_DISABLE_FPM_RUNTIME` | 是否移除 php-fpm 入口，profile 默认启用。 |
+| `PHPSFX_BCMATH_LEGACY_PROTOTYPES` | 是否修复 PHP 8.1 bcmath 旧式函数原型，profile 默认启用。 |
 | `PHPSFX_STRIP_BINARY` | 是否 strip 二进制，默认启用。 |
 
 ## 运行时校验

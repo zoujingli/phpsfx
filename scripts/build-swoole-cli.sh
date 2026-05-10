@@ -81,6 +81,7 @@ Important environment variables:
   PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
   PHPSFX_LIBSODIUM_STABLE_LIBRARY    Set to 1 to patch old Swoole CLI refs to libsodium 1.0.21, default from profile: 1
   PHPSFX_DISABLE_FPM_RUNTIME         Set to 1 to remove php-fpm sources/entry while keeping CLI web server, default from profile: 1
+  PHPSFX_BCMATH_LEGACY_PROTOTYPES    Set to 1 to rewrite old PHP 8.1 bcmath K&R prototypes for modern clang, default from profile: 1
   PHPSFX_STRIP_BINARY                Set to 1 to strip debug symbols from release binary, default: 1
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
   PHPSFX_DOWNLOAD_MIRROR_URL         Optional Swoole CLI dependency mirror URL passed to prepare.php
@@ -744,6 +745,68 @@ return function (Preprocessor $p) {
 PHP
     echo "Applied stable libsodium library profile" >&2
   fi
+
+  if [[ "${PHPSFX_BCMATH_LEGACY_PROTOTYPES:-0}" == "1" && -d "${SWOOLE_CLI_DIR}/ext/bcmath/libbcmath/src" ]]; then
+    python3 - "${SWOOLE_CLI_DIR}/ext/bcmath/libbcmath/src" <<'PY'
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+src = Path(sys.argv[1])
+replacements = {
+    "add.c": {
+        "void\nbc_add (n1, n2, result, scale_min)\n     bc_num n1, n2, *result;\n     int scale_min;\n": "void\nbc_add (bc_num n1, bc_num n2, bc_num *result, int scale_min)\n",
+    },
+    "sub.c": {
+        "void\nbc_sub (n1, n2, result, scale_min)\n     bc_num n1, n2, *result;\n     int scale_min;\n": "void\nbc_sub (bc_num n1, bc_num n2, bc_num *result, int scale_min)\n",
+    },
+    "compare.c": {
+        " int\n_bc_do_compare (n1, n2, use_sign, ignore_last)\n     bc_num n1, n2;\n     int use_sign;\n     int ignore_last;\n": " int\n_bc_do_compare (bc_num n1, bc_num n2, int use_sign, int ignore_last)\n",
+        "int\nbc_compare (n1, n2)\n     bc_num n1, n2;\n": "int\nbc_compare (bc_num n1, bc_num n2)\n",
+    },
+    "doaddsub.c": {
+        " bc_num\n_bc_do_add (n1, n2, scale_min)\n     bc_num n1, n2;\n     int scale_min;\n": " bc_num\n_bc_do_add (bc_num n1, bc_num n2, int scale_min)\n",
+        "bc_num\n_bc_do_sub (n1, n2, scale_min)\n     bc_num n1, n2;\n     int scale_min;\n": "bc_num\n_bc_do_sub (bc_num n1, bc_num n2, int scale_min)\n",
+    },
+    "init.c": {
+        "bc_num\n_bc_new_num_ex (length, scale, persistent)\n     int length, scale, persistent;\n": "bc_num\n_bc_new_num_ex (int length, int scale, int persistent)\n",
+        "void\n_bc_free_num_ex (num, persistent)\n    bc_num *num;\n    int persistent;\n": "void\n_bc_free_num_ex (bc_num *num, int persistent)\n",
+    },
+    "int2num.c": {
+        "void\nbc_int2num (num, val)\n     bc_num *num;\n     int val;\n": "void\nbc_int2num (bc_num *num, int val)\n",
+    },
+    "nearzero.c": {
+        "char\nbc_is_near_zero (num, scale)\n     bc_num num;\n     int scale;\n": "char\nbc_is_near_zero (bc_num num, int scale)\n",
+    },
+    "neg.c": {
+        "char\nbc_is_neg (num)\n     bc_num num;\n": "char\nbc_is_neg (bc_num num)\n",
+    },
+    "num2long.c": {
+        "long\nbc_num2long (num)\n     bc_num num;\n": "long\nbc_num2long (bc_num num)\n",
+    },
+    "rmzero.c": {
+        " void\n_bc_rm_leading_zeros (num)\n     bc_num num;\n": " void\n_bc_rm_leading_zeros (bc_num num)\n",
+    },
+}
+
+changed = 0
+for name, items in replacements.items():
+    path = src / name
+    if not path.is_file():
+        continue
+    text = path.read_text(encoding="utf-8")
+    original = text
+    for old, new in items.items():
+        text = text.replace(old, new)
+    if text != original:
+        path.write_text(text, encoding="utf-8")
+        changed += 1
+
+print(f"Patched legacy bcmath prototypes in {changed} source files")
+PY
+    echo "Applied legacy bcmath prototype compatibility profile" >&2
+  fi
 }
 
 if [[ -z "${PLATFORM}" ]]; then
@@ -790,7 +853,11 @@ fi
 if [[ -n "${DOWNLOAD_MIRROR_URL}" ]]; then
   PREPARE_ARGS+=("--with-download-mirror-url=${DOWNLOAD_MIRROR_URL}")
 fi
-php prepare.php --without-docker=1 --with-parallel-jobs="${JOBS}" --with-global-prefix="${GLOBAL_PREFIX}" "${PREPARE_ARGS[@]}"
+if [[ ${#PREPARE_ARGS[@]} -gt 0 ]]; then
+  php prepare.php --without-docker=1 --with-parallel-jobs="${JOBS}" --with-global-prefix="${GLOBAL_PREFIX}" "${PREPARE_ARGS[@]}"
+else
+  php prepare.php --without-docker=1 --with-parallel-jobs="${JOBS}" --with-global-prefix="${GLOBAL_PREFIX}"
+fi
 
 bash ./make.sh all-library
 bash ./make.sh config
@@ -834,6 +901,7 @@ cat > "${DIST_DIR}/${META_NAME}" <<META
   "oniguruma_clang_compat": "${PHPSFX_ONIGURUMA_CLANG_COMPAT:-0}",
   "libsodium_stable_library": "${PHPSFX_LIBSODIUM_STABLE_LIBRARY:-0}",
   "disable_fpm_runtime": "${PHPSFX_DISABLE_FPM_RUNTIME:-${PHPSFX_SFX_ONLY_RUNTIME:-0}}",
+  "bcmath_legacy_prototypes": "${PHPSFX_BCMATH_LEGACY_PROTOTYPES:-0}",
   "strip_binary": "${STRIP_BINARY}",
   "swoole_cli_repo": "${SWOOLE_CLI_REPO}",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",

@@ -208,7 +208,7 @@ jobs:
           if [ "${status}" -ne 0 ]; then
             {
               echo "== matched errors =="
-              grep -Ein 'fatal error|[^A-Za-z]error:|undefined reference|failed|killed|No such|cannot find|not found|permission denied|make(\[[0-9]+\])?: \*\*\*' "build-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}.log" | tail -140 || true
+              grep -Ein 'fatal error|[^A-Za-z]error:|undefined reference|failed|killed|No such|cannot find|permission denied|make(\[[0-9]+\])?: \*\*\*' "build-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}.log" | tail -140 || true
               echo
               echo "== build log tail =="
               tail -240 "build-php${PHPSFX_PHP_VERSION}-${PHPSFX_PROFILE}-${PHPSFX_PLATFORM}.log"
