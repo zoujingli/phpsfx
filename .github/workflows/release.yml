@@ -61,6 +61,7 @@ jobs:
       PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.4' }}
       PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.0.0' }}
       PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/${{ matrix.platform }}
+      PHPSFX_BUILD_JOBS: 2
 
     steps:
       - name: Checkout phpsfx
@@ -114,7 +115,11 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           if [ "${status}" -ne 0 ]; then
-            tail_text=$(tail -80 "build-${PHPSFX_PLATFORM}.log" | tr '\n' '|' | sed -e 's/%/%25/g')
+            grep -Ein 'fatal error|[^A-Za-z]error:|failed|killed|No such|make(\\[[0-9]+\\])?: \\*\\*\\*' "build-${PHPSFX_PLATFORM}.log" | tail -80 > "build-${PHPSFX_PLATFORM}-summary.log" || true
+            if [ ! -s "build-${PHPSFX_PLATFORM}-summary.log" ]; then
+              tail -120 "build-${PHPSFX_PLATFORM}.log" > "build-${PHPSFX_PLATFORM}-summary.log"
+            fi
+            tail_text=$(cat "build-${PHPSFX_PLATFORM}-summary.log" | tr '\n' '|' | sed -e 's/%/%25/g')
             echo "::error title=Build failed ${PHPSFX_PLATFORM}::${tail_text}"
             exit "${status}"
           fi
@@ -130,7 +135,9 @@ jobs:
           name: build-log-${{ matrix.platform }}
           retention-days: 7
           if-no-files-found: ignore
-          path: build-${{ matrix.platform }}.log
+          path: |
+            build-${{ matrix.platform }}.log
+            build-${{ matrix.platform }}-summary.log
 
       - name: Upload platform artifact
         uses: actions/upload-artifact@v4
