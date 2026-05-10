@@ -14,7 +14,7 @@ swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 
 ## Release 产物
 
-默认同时发布两个 PHP 版本、三个组件 profile、四个平台。资产命名格式：
+默认同时发布两个 PHP 版本、两个组件 profile，并按官方平台族规划 Linux / macOS / Windows(CygWin)；当前 Linux/macOS 生成资产，未实现的平台自动跳过。资产命名格式：
 
 ```text
 swoole-cli-php{php_version}-{profile}-{platform}
@@ -32,26 +32,24 @@ PHP 版本映射：
 | profile | 组件集合 |
 |---------|----------|
 | `min` | `bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,mysqlnd,openssl,pcntl,pdo,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib` |
-| `mid` | `bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,mysqlnd,openssl,pcntl,pdo,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib` |
 | `max` | Swoole CLI 官方默认组件：`opcache,curl,iconv,bz2,bcmath,pcntl,filter,session,tokenizer,mbstring,ctype,zlib,zip,posix,sockets,pdo,sqlite3,phar,mysqlnd,mysqli,intl,fileinfo,pdo_mysql,soap,xsl,gmp,exif,sodium,openssl,readline,xml,gd,redis,swoole,yaml,imagick,mongodb,xlswriter,gettext` |
 
 平台：
 
-| 平台 | platform |
-|------|----------|
-| Linux x86_64 | `linux-x64` |
-| Linux ARM64 | `linux-a64` |
-| macOS x86_64 | `macos-x64` |
-| macOS ARM64 | `macos-a64` |
+| 平台族 | platform | 状态 |
+|--------|----------|------|
+| Linux x86_64 | `linux-x64` | 发布 |
+| Linux ARM64 | `linux-a64` | 发布 |
+| macOS x86_64 | `macos-x64` | 发布 |
+| macOS ARM64 | `macos-a64` | 发布 |
+| Windows CygWin x86_64 | `cygwin-x64` | 暂未实现，CI 自动跳过 |
 
 示例资产：
 
 ```text
 swoole-cli-php8.4-min-linux-x64
-swoole-cli-php8.4-mid-linux-x64
 swoole-cli-php8.4-max-linux-x64
 swoole-cli-php8.1-min-linux-x64
-swoole-cli-php8.1-mid-linux-x64
 swoole-cli-php8.1-max-linux-x64
 ```
 
@@ -60,7 +58,7 @@ swoole-cli-php8.1-max-linux-x64
 - `SHA256SUMS`
 - `build-meta.json`
 
-暂不发布 Windows 产物。
+Windows CygWin 平台已进入发布矩阵，但当前构建链路暂未实现，CI 会自动跳过，不生成 Release 资产。
 
 ## 组件裁剪说明
 
@@ -72,15 +70,9 @@ swoole-cli-php8.1-max-linux-x64
 - zlib：移除上游模板中与 zlib 构建无关的 BZip2 依赖。
 - redis：关闭 redis session 支持，因为该 profile 不打包 PHP `session` 扩展。
 
-`mid` 额外裁剪：
-
-- Swoole 扩展：不启用 `pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd` 等可选功能。
-- redis：关闭 redis session 支持，因为该 profile 不打包 PHP `session` 扩展。
-- curl/libzip/zlib 保持上游默认依赖能力。
-
 `max` 不裁剪官方默认组件和依赖能力。
 
-所有 profile 在 macOS 构建时使用 oniguruma 6.9.10 release tarball，以兼容新版 clang。
+所有 profile 都启用 SFX-only 运行时裁剪：保留 CLI/SFX 必要入口，移除 php-fpm 与 CLI 内置 Web Server 代码路径；macOS 构建时使用 oniguruma 6.9.10 release tarball，以兼容新版 clang。
 
 ## 自动发布
 
@@ -88,7 +80,7 @@ GitHub Actions workflow：`.github/workflows/release.yml`。
 
 触发方式：
 
-- 推送 `v*` 标签：自动构建所有 PHP/profile/platform 组合并创建 GitHub Release。
+- 推送 `v*` 标签：自动构建所有已实现的 PHP/profile/platform 组合并创建 GitHub Release；未实现平台自动跳过。
 - 手动运行 `Release swoole-cli`：可输入 `version`、`php_version`、`profile`、`swoole_cli_ref`、`prepare_flags`。
 
 示例：
@@ -107,7 +99,7 @@ https://github.com/swoole/swoole-cli.git
 手动运行 workflow 时：
 
 - `php_version=all` 同时构建 PHP 8.1 与 8.4。
-- `profile=all` 同时构建 `min/mid/max`。
+- `profile=all` 同时构建 `min/max`。
 - 如需覆盖上游 ref，请选择单个 PHP 版本再填写 `swoole_cli_ref`。
 
 ## 本地 / WSL 调试
@@ -124,7 +116,7 @@ PHPSFX_PROFILE=min \
 
 PHPSFX_PLATFORM=linux-x64 \
 PHPSFX_PHP_VERSION=8.1 \
-PHPSFX_PROFILE=mid \
+PHPSFX_PROFILE=max \
   bash scripts/build-swoole-cli.sh
 ```
 
@@ -158,7 +150,7 @@ PHPSFX_PHP_VERSION=8.4 PHPSFX_PROFILE=min \
 也可指定版本：
 
 ```bash
-PHPSFX_PHP_VERSION=8.1 PHPSFX_PROFILE=mid \
+PHPSFX_PHP_VERSION=8.1 PHPSFX_PROFILE=max \
   bash scripts/download-release-asset.sh linux-x64 v0.1.0 /tmp/swoole-cli
 ```
 
@@ -225,7 +217,7 @@ chmod +x build/app
 ```bash
 bash scripts/test-packaging.sh swoole-cli-php8.4-min-linux-x64
 # 或
-bash scripts/test-packaging.sh swoole-cli-php8.1-mid-linux-x64
+bash scripts/test-packaging.sh swoole-cli-php8.1-max-linux-x64
 ```
 
 ## 参考

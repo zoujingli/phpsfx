@@ -13,7 +13,7 @@ Examples:
 Environment:
   PHPSFX_RELEASE_REPO       GitHub repo, default: zoujingli/phpsfx
   PHPSFX_PHP_VERSION        PHP version line, default: 8.4
-  PHPSFX_PROFILE            Runtime component profile: min, mid, or max, default: min
+  PHPSFX_PROFILE            Runtime component profile: min or max, default: min
   PHPSFX_ASSET_PREFIX       Release asset prefix, default: swoole-cli
 USAGE
   exit 2

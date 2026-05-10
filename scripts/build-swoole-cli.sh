@@ -18,6 +18,7 @@ fi
 PLATFORM=${1:-${PHPSFX_PLATFORM:-}}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
+SWOOLE_CLI_CHECKOUT_MODE=${PHPSFX_SWOOLE_CLI_CHECKOUT_MODE:-auto}
 default_swoole_cli_ref() {
   case "$1" in
     8.1) echo "v6.0.2.0" ;;
@@ -43,7 +44,7 @@ PROFILE_NAME=${PHPSFX_PROFILE_NAME:-${PHPSFX_PROFILE:-min}}
 DEFAULT_EXTENSIONS='bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,mysqlnd,openssl,pcntl,pdo,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
 DEFAULT_PREPARE_FLAGS='+bcmath +ctype +curl +fileinfo +filter +iconv +mbstring +mysqlnd +openssl +pcntl +pdo +pdo_mysql +phar +posix +redis +sockets +sodium +swoole +tokenizer +xml +zip +zlib -bz2 -exif -gd -gettext -gmp -imagick -intl -mongodb -mysqli -opcache -readline -session -soap -sqlite3 -xlswriter -xsl -yaml'
 # PHPSFX_SWOOLE_CLI_PREPARE_FLAGS 允许显式设置为空字符串：
-# - min/mid profile 会提供裁剪后的 +extension/-extension 参数；
+# - min profile 会提供裁剪后的 +extension/-extension 参数；
 # - max profile 需要空参数以保留 Swoole CLI 上游默认组件集合。
 PREPARE_FLAGS=${PHPSFX_SWOOLE_CLI_PREPARE_FLAGS-${DEFAULT_PREPARE_FLAGS}}
 EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS-swoole,redis,pdo,pdo_mysql,mysqlnd,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,sodium,sockets,posix,pcntl}
@@ -63,12 +64,13 @@ Important environment variables:
   PHPSFX_PHP_VERSION                 PHP version prefix used for asset name and validation, default: 8.4
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
   PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.0.2.0 for PHP 8.1, v6.2.0.0 for PHP 8.4
+  PHPSFX_SWOOLE_CLI_CHECKOUT_MODE    auto or archive. archive uses GitHub codeload tarball, default: auto
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
   PHPSFX_SWOOLE_SRC_REF              Optional swoole-src tag/ref when upstream ref lacks sapi/SWOOLE-VERSION.conf
   PHPSFX_REQUIRED_EXTENSIONS         Comma-separated runtime extensions checked after build
   PHPSFX_FORBIDDEN_EXTENSIONS        Comma-separated extensions that must not be loaded
   PHPSFX_ALLOW_EXTRA_EXTENSIONS      Set to 1 to skip forbidden-extension checks for local full-runtime smoke
-  PHPSFX_PROFILE                     Runtime component profile: min, mid, or max, default: min
+  PHPSFX_PROFILE                     Runtime component profile: min or max, default: min
   PHPSFX_PROFILE_FILE                Profile env file, default: scripts/profiles/${PHPSFX_PROFILE}.env
   PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS Comma-separated prepare.php default extension list override
   PHPSFX_SWOOLE_SLIM_EXTENSION       Set to 1 to trim optional Swoole extension features, default from profile: 1
@@ -77,6 +79,8 @@ Important environment variables:
   PHPSFX_ZLIB_SLIM_LIBRARY           Set to 1 to remove unrelated zlib library deps, default from profile: 1
   PHPSFX_REDIS_DISABLE_SESSION       Set to 1 to build redis without session hooks, default from profile: 1
   PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
+  PHPSFX_LIBSODIUM_STABLE_LIBRARY    Set to 1 to patch old Swoole CLI refs to libsodium 1.0.21, default from profile: 1
+  PHPSFX_SFX_ONLY_RUNTIME            Set to 1 to remove php-fpm and built-in CLI web server, default from profile: 1
   PHPSFX_STRIP_BINARY                Set to 1 to strip debug symbols from release binary, default: 1
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
   PHPSFX_DOWNLOAD_MIRROR_URL         Optional Swoole CLI dependency mirror URL passed to prepare.php
@@ -175,6 +179,24 @@ download_swoole_cli_archive() {
 checkout_swoole_cli() {
   local preserved_pool origin_url need_checkout
   mkdir -p "${DIST_DIR}" "$(dirname "${SWOOLE_CLI_DIR}")"
+
+  if [[ "${SWOOLE_CLI_CHECKOUT_MODE}" == "archive" ]]; then
+    preserved_pool=""
+    if [[ -d "${SWOOLE_CLI_DIR}/pool" ]]; then
+      preserved_pool=$(mktemp -d)
+      mv "${SWOOLE_CLI_DIR}/pool" "${preserved_pool}/pool"
+    fi
+    download_swoole_cli_archive
+    if [[ -n "${preserved_pool}" && -d "${preserved_pool}/pool" ]]; then
+      rm -rf "${SWOOLE_CLI_DIR}/pool"
+      mv "${preserved_pool}/pool" "${SWOOLE_CLI_DIR}/pool"
+      rmdir "${preserved_pool}" 2>/dev/null || true
+    fi
+    cd "${SWOOLE_CLI_DIR}"
+    rm -f make.sh
+    rm -rf bin/swoole-cli bin/dist thirdparty var/php-* modules libs libphp.la
+    return 0
+  fi
 
   need_checkout=0
   if [[ -d "${SWOOLE_CLI_DIR}/.git" ]]; then
@@ -295,7 +317,62 @@ prime_swoole_extension_archive() {
 }
 
 apply_profile_patches() {
-  local enabled_file swoole_file curl_file libzip_file zlib_file redis_file oniguruma_file ext
+  local enabled_file swoole_file curl_file libzip_file zlib_file redis_file oniguruma_file libsodium_file ext
+
+  if [[ "${PHPSFX_SFX_ONLY_RUNTIME:-0}" == "1" ]]; then
+    python3 - "${SWOOLE_CLI_DIR}/sapi/cli/config.m4" "${SWOOLE_CLI_DIR}/sapi/cli/php_cli.c" <<'PY'
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+cli_path = Path(sys.argv[2])
+
+config = config_path.read_text(encoding="utf-8")
+config = config.replace(
+    "  PHP_ADD_BUILD_DIR(sapi/cli/fpm)\n  PHP_ADD_BUILD_DIR(sapi/cli/fpm/events)\n",
+    "",
+)
+config = re.sub(
+    r'  PHP_CLI_FILES="php_cli\.c \\\n\s*ps_title\.c \\\n\s*patch\.c \\\n\s*php_cli_process_title\.c \\\n\s*php_cli_server\.c \\\n\s*php_http_parser\.c"',
+    '  PHP_CLI_FILES="php_cli.c \\\n    ps_title.c \\\n    patch.c \\\n    php_cli_process_title.c"',
+    config,
+)
+config = re.sub(
+    r'  PHP_FPM_FILES="fpm/fpm\.c \\\n.*?\n  "\n',
+    '  PHP_FPM_FILES=""\n',
+    config,
+    flags=re.S,
+)
+config = config.replace(
+    "PHP_SELECT_CLI_SAPI(cli, program, $PHP_CLI_FILES $PHP_FPM_FILES $PHP_SFX_FILES $PHP_FPM_TRACE_FILES, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1, '$(SAPI_CLI_PATH)')",
+    "PHP_SELECT_CLI_SAPI(cli, program, $PHP_CLI_FILES $PHP_SFX_FILES, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -DSWOOLE_CLI_SFX_ONLY=1, '$(SAPI_CLI_PATH)')",
+)
+config_path.write_text(config, encoding="utf-8")
+
+cli = cli_path.read_text(encoding="utf-8")
+cli = cli.replace(
+    "\tcase 'P':\n\t\t\treturn fpm_main(argc, argv);\n\t\tdefault:",
+    "\tcase 'P':\n#ifndef SWOOLE_CLI_SFX_ONLY\n\t\t\treturn fpm_main(argc, argv);\n#else\n\t\t\tphp_cli_usage(argv[0]);\n\t\t\treturn FAILURE;\n#endif\n\t\tdefault:",
+)
+cli = cli.replace(
+    "\t\t\tcase 'U': /* self update */\n\t\t\t\tif (php_request_startup() == FAILURE) {\n\t\t\t\t    goto err;\n\t\t\t\t}\n\t\t\t\trequest_started = 1;\n\t\t\t\tswoole_cli_self_update();\n\t\t\t\tphp_output_end_all();\n\t\t\t\tEG(exit_status) = 0;\n\t\t\t\tgoto out;\n",
+    "#ifndef SWOOLE_CLI_SFX_ONLY\n\t\t\tcase 'U': /* self update */\n\t\t\t\tif (php_request_startup() == FAILURE) {\n\t\t\t\t    goto err;\n\t\t\t\t}\n\t\t\t\trequest_started = 1;\n\t\t\t\tswoole_cli_self_update();\n\t\t\t\tphp_output_end_all();\n\t\t\t\tEG(exit_status) = 0;\n\t\t\t\tgoto out;\n#endif\n",
+)
+cli = cli.replace(
+    "#ifndef PHP_CLI_WIN32_NO_CONSOLE\n\t\t\tcase 'S':\n\t\t\t\tsapi_module = &cli_server_sapi_module;\n\t\t\t\tcli_server_sapi_module.additional_functions = server_additional_functions;\n\t\t\t\tbreak;\n#endif",
+    "#if !defined(PHP_CLI_WIN32_NO_CONSOLE) && !defined(SWOOLE_CLI_SFX_ONLY)\n\t\t\tcase 'S':\n\t\t\t\tsapi_module = &cli_server_sapi_module;\n\t\t\t\tcli_server_sapi_module.additional_functions = server_additional_functions;\n\t\t\t\tbreak;\n#endif",
+)
+cli = cli.replace(
+    "#ifndef PHP_CLI_WIN32_NO_CONSOLE\n\t\tif (sapi_module == &cli_sapi_module) {\n#endif\n\t\t\texit_status = do_cli(argc, argv);\n#ifndef PHP_CLI_WIN32_NO_CONSOLE\n\t\t} else {\n\t\t\texit_status = do_cli_server(argc, argv);\n\t\t}\n#endif",
+    "#if !defined(PHP_CLI_WIN32_NO_CONSOLE) && !defined(SWOOLE_CLI_SFX_ONLY)\n\t\tif (sapi_module == &cli_sapi_module) {\n#endif\n\t\t\texit_status = do_cli(argc, argv);\n#if !defined(PHP_CLI_WIN32_NO_CONSOLE) && !defined(SWOOLE_CLI_SFX_ONLY)\n\t\t} else {\n\t\t\texit_status = do_cli_server(argc, argv);\n\t\t}\n#endif",
+)
+cli_path.write_text(cli, encoding="utf-8")
+PY
+    echo "Applied SFX-only runtime profile" >&2
+  fi
 
   # Swoole CLI 上游默认启用 full profile；这里将默认启用列表改为 profile 明确声明的最小集合，
   # 防止 prepare.php 在解析依赖时下载 sqlite/intl/gd/imagick/mongodb 等未使用组件。
@@ -570,6 +647,32 @@ return function (Preprocessor $p) {
 PHP
     echo "Applied oniguruma clang compatibility profile" >&2
   fi
+
+  if [[ "${PHPSFX_LIBSODIUM_STABLE_LIBRARY:-0}" == "1" ]]; then
+    libsodium_file="${SWOOLE_CLI_DIR}/sapi/src/builder/library/libsodium.php"
+    cat > "${libsodium_file}" <<'PHP'
+<?php
+
+use SwooleCli\Library;
+use SwooleCli\Preprocessor;
+
+return function (Preprocessor $p) {
+    $p->addLibrary(
+        (new Library('libsodium'))
+            // 老版本 Swoole CLI 引用的 libsodium 1.0.18 上游下载地址已经不可用；
+            // 统一使用 1.0.21 release tarball，保持 sodium 扩展能力不变并避免 CI 下载 404。
+            ->withLicense('https://en.wikipedia.org/wiki/ISC_license', Library::LICENSE_SPEC)
+            ->withHomePage('https://doc.libsodium.org/')
+            ->withUrl('https://download.libsodium.org/libsodium/releases/libsodium-1.0.21.tar.gz')
+            ->withFileHash('md5', 'ecd60ebc2c916133db2f6b3b2e9e775d')
+            ->withPrefix(LIBSODIUM_PREFIX)
+            ->withConfigure('./configure --prefix=' . LIBSODIUM_PREFIX . ' --enable-static --disable-shared')
+            ->withPkgName('libsodium')
+    );
+};
+PHP
+    echo "Applied stable libsodium library profile" >&2
+  fi
 }
 
 if [[ -z "${PLATFORM}" ]]; then
@@ -658,9 +761,12 @@ cat > "${DIST_DIR}/${META_NAME}" <<META
   "zlib_slim_library": "${PHPSFX_ZLIB_SLIM_LIBRARY:-0}",
   "redis_disable_session": "${PHPSFX_REDIS_DISABLE_SESSION:-0}",
   "oniguruma_clang_compat": "${PHPSFX_ONIGURUMA_CLANG_COMPAT:-0}",
+  "libsodium_stable_library": "${PHPSFX_LIBSODIUM_STABLE_LIBRARY:-0}",
+  "sfx_only_runtime": "${PHPSFX_SFX_ONLY_RUNTIME:-0}",
   "strip_binary": "${STRIP_BINARY}",
   "swoole_cli_repo": "${SWOOLE_CLI_REPO}",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
+  "swoole_cli_checkout_mode": "${SWOOLE_CLI_CHECKOUT_MODE}",
   "swoole_src_ref": "${SWOOLE_SRC_REF}",
   "swoole_cli_commit": "${SWOOLE_CLI_COMMIT}",
   "prepare_flags": "${PREPARE_FLAGS}",
