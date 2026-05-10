@@ -27,7 +27,7 @@ swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 
 ## Release 产物
 
-默认发布两个 PHP 版本、两个组件 profile、四个 Linux/macOS 平台，资产命名格式如下：
+默认发布 PHP 8.4、两个组件 profile、四个 Linux/macOS 平台，资产命名格式如下：
 
 ```text
 swoole-cli-php{php_version}-{profile}-{platform}
@@ -38,8 +38,8 @@ swoole-cli-php{php_version}-{profile}-{platform}
 ```text
 swoole-cli-php8.4-min-linux-x64
 swoole-cli-php8.4-max-linux-x64
-swoole-cli-php8.1-min-linux-x64
-swoole-cli-php8.1-max-linux-x64
+swoole-cli-php8.4-min-macos-a64
+swoole-cli-php8.4-max-macos-a64
 ```
 
 同时发布：
@@ -52,7 +52,6 @@ swoole-cli-php8.1-max-linux-x64
 | PHP 版本线 | 默认 Swoole CLI ref | Swoole 源码说明 |
 |------------|---------------------|-----------------|
 | `8.4.x` | `v6.2.0.0` | 使用上游 ref 内置配置 |
-| `8.1.x` | `v6.0.2.0` | 使用 `swoole-src v6.0.2` |
 
 手动运行 workflow 时可以指定单个 PHP 版本并覆盖 `swoole_cli_ref`，用于验证上游新标签或指定提交。
 
@@ -93,7 +92,6 @@ opcache,curl,iconv,bz2,bcmath,pcntl,filter,session,tokenizer,mbstring,ctype,zlib
 
 - macOS 构建使用 oniguruma 6.9.10 release tarball，以兼容新版 clang。
 - 老版本上游引用的 libsodium 下载地址不可用时，构建脚本统一使用 libsodium 1.0.21 release tarball。
-- PHP 8.1 旧版 bcmath 源码仍包含 K&R 函数原型，构建脚本会转换为现代 C 原型以兼容新版 clang。
 - CI 使用 GitHub API tarball 获取 Swoole CLI 源码，避免完整仓库 checkout 在 macOS runner 上长时间卡住；本地仍可用 `PHPSFX_SWOOLE_CLI_CHECKOUT_MODE=git` 选择浅克隆 tag/ref。
 
 ## 支持平台
@@ -113,7 +111,7 @@ GitHub Actions workflow：`.github/workflows/release.yml`。
 
 触发方式：
 
-- 推送 `v*` 标签：构建全部 Linux/macOS、PHP 版本和 profile 组合，并创建 GitHub Release。
+- 推送 `v*` 标签：构建全部 Linux/macOS 平台和 profile 组合，并创建 GitHub Release。
 - 手动运行 `Release swoole-cli`：可输入 `version`、`php_version`、`profile`、`swoole_cli_ref`、`prepare_flags`。
 
 发版示例：
@@ -125,7 +123,7 @@ git push origin v0.1.0
 
 手动运行 workflow 时：
 
-- `php_version=all` 同时构建 PHP 8.1 与 8.4。
+- `php_version=all` 当前等同于构建 PHP 8.4。
 - `profile=all` 同时构建 `min/max`。
 - 覆盖 `swoole_cli_ref` 时必须选择单个 PHP 版本，避免同一个 ref 同时套用到不同 PHP 版本线。
 
@@ -140,11 +138,6 @@ PHPSFX_PLATFORM=linux-x64 \
 PHPSFX_PHP_VERSION=8.4 \
 PHPSFX_PROFILE=min \
   bash scripts/build-swoole-cli.sh
-
-PHPSFX_PLATFORM=linux-x64 \
-PHPSFX_PHP_VERSION=8.1 \
-PHPSFX_PROFILE=max \
-  bash scripts/build-swoole-cli.sh
 ```
 
 构建输出位于 `dist/`。
@@ -157,9 +150,8 @@ PHPSFX_PROFILE=max \
 | `PHPSFX_PHP_VERSION` | PHP 版本线，默认 `8.4`。 |
 | `PHPSFX_PROFILE` | 组件 profile，默认 `min`。 |
 | `PHPSFX_SWOOLE_CLI_REF` | Swoole CLI 分支、标签或提交。 |
-| `PHPSFX_SWOOLE_SRC_REF` | 可选 swoole-src ref，主要用于 PHP 8.1 版本线。 |
+| `PHPSFX_SWOOLE_SRC_REF` | 可选 swoole-src ref。 |
 | `PHPSFX_SWOOLE_CLI_PREPARE_FLAGS` | 传给上游 `prepare.php` 的扩展开关。 |
-| `PHPSFX_BCMATH_LEGACY_PROTOTYPES` | 是否修复 PHP 8.1 bcmath 旧式函数原型，profile 默认启用。 |
 | `PHPSFX_STRIP_BINARY` | 是否 strip 二进制，默认启用。 |
 
 ## 运行时校验
@@ -193,7 +185,7 @@ PHPSFX_PHP_VERSION=8.4 PHPSFX_PROFILE=min \
 下载指定版本：
 
 ```bash
-PHPSFX_PHP_VERSION=8.1 PHPSFX_PROFILE=max \
+PHPSFX_PHP_VERSION=8.4 PHPSFX_PROFILE=max \
   bash scripts/download-release-asset.sh linux-x64 v0.1.0 /tmp/swoole-cli
 ```
 
@@ -260,7 +252,7 @@ chmod +x build/app
 ```bash
 bash scripts/test-packaging.sh swoole-cli-php8.4-min-linux-x64
 # 或
-bash scripts/test-packaging.sh swoole-cli-php8.1-max-linux-x64
+bash scripts/test-packaging.sh swoole-cli-php8.4-max-linux-x64
 ```
 
 ## 参考

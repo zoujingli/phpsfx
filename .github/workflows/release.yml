@@ -12,14 +12,13 @@ on:
         default: 'v0.1.0'
         type: string
       php_version:
-        description: 'PHP version to build: all, 8.4, or 8.1'
+        description: 'PHP version to build: all or 8.4'
         required: true
         default: 'all'
         type: choice
         options:
           - all
           - '8.4'
-          - '8.1'
       profile:
         description: 'Component profile to build: all, min, or max'
         required: true
@@ -30,7 +29,7 @@ on:
           - min
           - max
       swoole_cli_ref:
-        description: 'Optional swoole-cli ref override. Only valid when php_version is 8.4 or 8.1.'
+        description: 'Optional swoole-cli ref override. Only valid when php_version is 8.4.'
         required: false
         default: ''
         type: string
@@ -78,15 +77,14 @@ jobs:
           ]
           defaults = {
               "8.4": {"swoole_cli_ref": "v6.2.0.0", "swoole_src_ref": ""},
-              "8.1": {"swoole_cli_ref": "v6.0.2.0", "swoole_src_ref": "v6.0.2"},
           }
           selected = os.environ.get("INPUT_PHP_VERSION") or "all"
           selected_profile = os.environ.get("INPUT_PROFILE") or "all"
           override_ref = os.environ.get("INPUT_SWOOLE_CLI_REF") or ""
           if selected == "all":
               if override_ref:
-                  raise SystemExit("swoole_cli_ref override requires php_version to be 8.4 or 8.1, not all")
-              versions = ["8.4", "8.1"]
+                  raise SystemExit("swoole_cli_ref override requires php_version to be 8.4, not all")
+              versions = ["8.4"]
           elif selected in defaults:
               versions = [selected]
           else:

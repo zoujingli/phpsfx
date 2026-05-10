@@ -21,7 +21,6 @@ SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.g
 SWOOLE_CLI_CHECKOUT_MODE=${PHPSFX_SWOOLE_CLI_CHECKOUT_MODE:-auto}
 default_swoole_cli_ref() {
   case "$1" in
-    8.1) echo "v6.0.2.0" ;;
     8.4) echo "v6.2.0.0" ;;
     *)
       echo "Unsupported PHP version line for default Swoole CLI ref: $1" >&2
@@ -63,7 +62,7 @@ Platforms:
 Important environment variables:
   PHPSFX_PHP_VERSION                 PHP version prefix used for asset name and validation, default: 8.4
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
-  PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.0.2.0 for PHP 8.1, v6.2.0.0 for PHP 8.4
+  PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.2.0.0 for PHP 8.4
   PHPSFX_SWOOLE_CLI_CHECKOUT_MODE    auto, git, or archive. git uses a shallow tag/ref checkout; archive uses GitHub API tarball, default: auto
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
   PHPSFX_SWOOLE_SRC_REF              Optional swoole-src tag/ref when upstream ref lacks sapi/SWOOLE-VERSION.conf
@@ -80,7 +79,6 @@ Important environment variables:
   PHPSFX_REDIS_DISABLE_SESSION       Set to 1 to build redis without session hooks, default from profile: 1
   PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
   PHPSFX_LIBSODIUM_STABLE_LIBRARY    Set to 1 to patch old Swoole CLI refs to libsodium 1.0.21, default from profile: 1
-  PHPSFX_BCMATH_LEGACY_PROTOTYPES    Set to 1 to rewrite old PHP 8.1 bcmath K&R prototypes for modern clang, default from profile: 1
   PHPSFX_STRIP_BINARY                Set to 1 to strip debug symbols from release binary, default: 1
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
   PHPSFX_DOWNLOAD_MIRROR_URL         Optional Swoole CLI dependency mirror URL passed to prepare.php
@@ -703,70 +701,6 @@ PHP
     echo "Applied stable libsodium library profile" >&2
   fi
 
-  if [[ "${PHPSFX_BCMATH_LEGACY_PROTOTYPES:-0}" == "1" && -d "${SWOOLE_CLI_DIR}/ext/bcmath/libbcmath/src" ]]; then
-    python3 - "${SWOOLE_CLI_DIR}/ext/bcmath/libbcmath/src" <<'PY'
-from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-src = Path(sys.argv[1])
-replacements = {
-    "add.c": {
-        "void\nbc_add (n1, n2, result, scale_min)\n     bc_num n1, n2, *result;\n     int scale_min;\n": "void\nbc_add (bc_num n1, bc_num n2, bc_num *result, int scale_min)\n",
-    },
-    "sub.c": {
-        "void\nbc_sub (n1, n2, result, scale_min)\n     bc_num n1, n2, *result;\n     int scale_min;\n": "void\nbc_sub (bc_num n1, bc_num n2, bc_num *result, int scale_min)\n",
-    },
-    "compare.c": {
-        " int\n_bc_do_compare (n1, n2, use_sign, ignore_last)\n     bc_num n1, n2;\n     int use_sign;\n     int ignore_last;\n": " int\n_bc_do_compare (bc_num n1, bc_num n2, int use_sign, int ignore_last)\n",
-        "int\nbc_compare (n1, n2)\n     bc_num n1, n2;\n": "int\nbc_compare (bc_num n1, bc_num n2)\n",
-    },
-    "doaddsub.c": {
-        " bc_num\n_bc_do_add (n1, n2, scale_min)\n     bc_num n1, n2;\n     int scale_min;\n": " bc_num\n_bc_do_add (bc_num n1, bc_num n2, int scale_min)\n",
-        "bc_num\n_bc_do_sub (n1, n2, scale_min)\n     bc_num n1, n2;\n     int scale_min;\n": "bc_num\n_bc_do_sub (bc_num n1, bc_num n2, int scale_min)\n",
-    },
-    "init.c": {
-        "bc_num\n_bc_new_num_ex (length, scale, persistent)\n     int length, scale, persistent;\n": "bc_num\n_bc_new_num_ex (int length, int scale, int persistent)\n",
-        "void\n_bc_free_num_ex (num, persistent)\n    bc_num *num;\n    int persistent;\n": "void\n_bc_free_num_ex (bc_num *num, int persistent)\n",
-    },
-    "int2num.c": {
-        "void\nbc_int2num (num, val)\n     bc_num *num;\n     int val;\n": "void\nbc_int2num (bc_num *num, int val)\n",
-    },
-    "nearzero.c": {
-        "char\nbc_is_near_zero (num, scale)\n     bc_num num;\n     int scale;\n": "char\nbc_is_near_zero (bc_num num, int scale)\n",
-    },
-    "neg.c": {
-        "char\nbc_is_neg (num)\n     bc_num num;\n": "char\nbc_is_neg (bc_num num)\n",
-    },
-    "num2str.c": {
-        "zend_string\n*bc_num2str_ex (num, scale)\n      bc_num num;\n\t  int scale;\n": "zend_string\n*bc_num2str_ex (bc_num num, int scale)\n",
-    },
-    "num2long.c": {
-        "long\nbc_num2long (num)\n     bc_num num;\n": "long\nbc_num2long (bc_num num)\n",
-    },
-    "rmzero.c": {
-        " void\n_bc_rm_leading_zeros (num)\n     bc_num num;\n": " void\n_bc_rm_leading_zeros (bc_num num)\n",
-    },
-}
-
-changed = 0
-for name, items in replacements.items():
-    path = src / name
-    if not path.is_file():
-        continue
-    text = path.read_text(encoding="utf-8")
-    original = text
-    for old, new in items.items():
-        text = text.replace(old, new)
-    if text != original:
-        path.write_text(text, encoding="utf-8")
-        changed += 1
-
-print(f"Patched legacy bcmath prototypes in {changed} source files")
-PY
-    echo "Applied legacy bcmath prototype compatibility profile" >&2
-  fi
 }
 
 if [[ -z "${PLATFORM}" ]]; then
@@ -860,7 +794,6 @@ cat > "${DIST_DIR}/${META_NAME}" <<META
   "redis_disable_session": "${PHPSFX_REDIS_DISABLE_SESSION:-0}",
   "oniguruma_clang_compat": "${PHPSFX_ONIGURUMA_CLANG_COMPAT:-0}",
   "libsodium_stable_library": "${PHPSFX_LIBSODIUM_STABLE_LIBRARY:-0}",
-  "bcmath_legacy_prototypes": "${PHPSFX_BCMATH_LEGACY_PROTOTYPES:-0}",
   "strip_binary": "${STRIP_BINARY}",
   "swoole_cli_repo": "${SWOOLE_CLI_REPO}",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
