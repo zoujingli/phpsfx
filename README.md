@@ -56,7 +56,7 @@ session,soap,sqlite3,xlswriter,xsl,yaml
 - libzip：保留 Zip + zlib + OpenSSL，默认不启用 BZip2、LZMA、Zstd。
 - zlib：移除上游模板中与 zlib 构建无关的 BZip2 依赖。
 - redis：默认关闭 redis session 支持，因为本运行时不打包 PHP `session` 扩展。
-- oniguruma：macOS 构建时兼容新版 clang 对旧版 oniguruma 函数指针告警的严格处理。
+- oniguruma：使用 6.9.10 release tarball，并在 macOS 构建时兼容新版 clang 对旧版函数指针告警的严格处理。
 
 依赖库安装前缀默认放在 `.build/swoole-cli/.global-prefix/<platform>`，不会写入 `/usr/local/swoole-cli`，适合 GitHub Actions 和 WSL 普通权限构建。
 

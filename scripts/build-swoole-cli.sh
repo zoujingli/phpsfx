@@ -496,12 +496,12 @@ return function (Preprocessor $p) {
     $p->addLibrary(
         (new Library('oniguruma'))
             ->withHomePage('https://github.com/kkos/oniguruma.git')
-            ->withUrl('https://github.com/kkos/oniguruma/archive/refs/tags/v6.9.9.tar.gz')
-            ->withFile('oniguruma-v6.9.9.tar.gz')
-            ->withFileHash('md5', '6a3defb3d5e57c2fa4b6f3b4ec6de28b')
+            ->withUrl('https://github.com/kkos/oniguruma/releases/download/v6.9.10/onig-6.9.10.tar.gz')
+            ->withFile('onig-6.9.10.tar.gz')
+            ->withFileHash('sha256', '2a5cfc5ae259e4e97f86b68dfffc152cdaffe94e2060b770cb827238d769fc05')
             ->withPrefix($oniguruma_prefix)
             ->withConfigure(
-                './autogen.sh && ' . $cflags . './configure --prefix=' . $oniguruma_prefix . ' --enable-static --disable-shared'
+                $cflags . './configure --prefix=' . $oniguruma_prefix . ' --enable-static --disable-shared'
             )
             ->withLicense('https://github.com/kkos/oniguruma/blob/master/COPYING', Library::LICENSE_SPEC)
             ->withPkgName('oniguruma')
