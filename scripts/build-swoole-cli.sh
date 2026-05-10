@@ -159,6 +159,29 @@ ERROR
   fi
 }
 
+prime_swoole_extension_archive() {
+  local swoole_version tgz_file archive_url
+  swoole_version=$(tr -d '[:space:]' < sapi/SWOOLE-VERSION.conf)
+  tgz_file="${SWOOLE_CLI_DIR}/pool/ext/swoole-${swoole_version}.tgz"
+  if [[ -s "${tgz_file}" ]]; then
+    return 0
+  fi
+
+  # 上游 download-swoole-src-archive.sh 在部分 runner 上会被 sh 执行，导致 [[ 语法失败后重新 clone swoole-src。
+  # 这里提前生成 prepare.php 期望的 tgz，避免发布构建依赖额外 git clone；archive checkout 的 ext/swoole
+  # 可能是空子模块目录，因此缺少源码时改用 codeload tarball。
+  mkdir -p "$(dirname "${tgz_file}")"
+  if [[ -f "${SWOOLE_CLI_DIR}/ext/swoole/CMakeLists.txt" ]]; then
+    tar -czf "${tgz_file}" -C "${SWOOLE_CLI_DIR}/ext/swoole" .
+    return 0
+  fi
+
+  archive_url="https://codeload.github.com/swoole/swoole-src/tar.gz/${swoole_version}"
+  echo "Bundled ext/swoole is empty, downloading swoole-src archive: ${archive_url}" >&2
+  require_command curl
+  retry_command curl -fL --retry 3 --retry-delay 2 -o "${tgz_file}" "${archive_url}"
+}
+
 if [[ -z "${PLATFORM}" ]]; then
   PLATFORM=$(detect_platform)
 fi
@@ -186,6 +209,7 @@ else
   SWOOLE_CLI_COMMIT="${SWOOLE_CLI_REF} (archive)"
 fi
 assert_target_php_version
+prime_swoole_extension_archive
 
 export COMPOSER_ALLOW_SUPERUSER=1
 composer install --no-interaction --no-progress --prefer-dist --no-dev --no-scripts --optimize-autoloader
