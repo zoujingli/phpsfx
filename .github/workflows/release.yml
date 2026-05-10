@@ -36,8 +36,7 @@ concurrency:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  PHPSFX_EXTENSIONS: bcmath,ctype,curl,dom,fileinfo,filter,iconv,intl,mbstring,openssl,pcntl,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib,opcache
-  PHPSFX_REQUIRED_EXTENSIONS: swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,intl,zip,dom,simplexml,xmlreader,xmlwriter
+  PHPSFX_PROFILE_FILE: scripts/profiles/hyperfadmin-slim.env
 
 jobs:
   build:
@@ -90,7 +89,7 @@ jobs:
           php-version: ${{ github.event.inputs.php_version || '8.4' }}
           tools: composer:v2
           coverage: none
-          extensions: curl, openssl, mbstring, phar
+          extensions: curl, openssl, mbstring, phar, zip
           ini-values: memory_limit=-1, phar.readonly=0
 
       - name: Show environment
@@ -192,6 +191,14 @@ jobs:
           target_commitish: ${{ github.sha }}
           draft: false
           prerelease: false
+          body: |
+            Swoole CLI PHP ${{ env.PHPSFX_PHP_VERSION }} runtime for HyperfAdmin.
+
+            This release uses the `hyperfadmin-slim` profile and Swoole CLI SFX format:
+
+            `swoole-cli + payload.php|app.phar + pack('J', payloadSize)`
+
+            Run packed applications with `--self`, for example `./app --self list`.
           files: |
             dist/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-*
             dist/SHA256SUMS

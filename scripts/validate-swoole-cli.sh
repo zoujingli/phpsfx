@@ -17,6 +17,8 @@ chmod +x "${SWOOLE_CLI}"
 "${SWOOLE_CLI}" -r '
 $expectedPrefix = getenv("PHPSFX_EXPECTED_PHP_PREFIX") ?: "8.4.";
 $required = array_values(array_filter(array_map("trim", explode(",", getenv("PHPSFX_REQUIRED_EXTENSIONS") ?: ""))));
+$forbidden = array_values(array_filter(array_map("trim", explode(",", getenv("PHPSFX_FORBIDDEN_EXTENSIONS") ?: ""))));
+$allowExtra = filter_var(getenv("PHPSFX_ALLOW_EXTRA_EXTENSIONS") ?: "0", FILTER_VALIDATE_BOOL);
 $errors = [];
 
 if (!str_starts_with(PHP_VERSION, $expectedPrefix)) {
@@ -41,6 +43,18 @@ if ($missing !== []) {
     $errors[] = "Missing extensions: " . implode(", ", $missing);
 }
 
+$unexpected = [];
+if (!$allowExtra) {
+    foreach ($forbidden as $extension) {
+        if (extension_loaded($extension)) {
+            $unexpected[] = $extension;
+        }
+    }
+}
+if ($unexpected !== []) {
+    $errors[] = "Unexpected extensions in slim runtime: " . implode(", ", $unexpected);
+}
+
 if (!extension_loaded("swoole") || !defined("SWOOLE_VERSION")) {
     $errors[] = "swoole extension is not available";
 }
@@ -51,6 +65,8 @@ $result = [
     "swoole_cli" => defined("SWOOLE_CLI"),
     "swoole_version" => defined("SWOOLE_VERSION") ? SWOOLE_VERSION : null,
     "required_extensions" => $required,
+    "forbidden_extensions" => $forbidden,
+    "allow_extra_extensions" => $allowExtra,
     "errors" => $errors,
 ];
 

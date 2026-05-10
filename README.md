@@ -8,7 +8,7 @@
 swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 ```
 
-其中 `pack('J', payloadSize)` 是 Swoole CLI 官方 SFX 读取逻辑需要的 8 字节 big-endian 长度尾部。相比 `micro.sfx`，该方式直接复用完整 Swoole CLI 运行模式，更适合 Hyperf/Swoole 服务型应用。
+其中 `pack('J', payloadSize)` 是 Swoole CLI 官方 SFX 读取逻辑需要的 8 字节长度尾部（与官方 `pack-sfx.php` 保持一致）。相比 `micro.sfx`，该方式直接复用完整 Swoole CLI 运行模式，更适合 Hyperf/Swoole 服务型应用。
 
 运行已打包产物时需要传入 `--self`，例如 `./app --self list`。这是 Swoole CLI 官方 SFX 模式的入口开关。
 
@@ -32,22 +32,22 @@ swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 
 ## 内置扩展与裁剪
 
-默认保留 HyperfAdmin 服务端需要的常用扩展：
+默认使用 `scripts/profiles/hyperfadmin-slim.env`，只保留 HyperfAdmin 服务端、Phar 发布、外部 `public/` 资源解压实际需要的扩展：
 
 ```text
-bcmath,ctype,curl,dom,fileinfo,filter,iconv,intl,mbstring,openssl,pcntl,
+bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,openssl,pcntl,
 pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,
-xml,xmlreader,xmlwriter,zip,zlib,opcache
+xml,xmlreader,xmlwriter,zip,zlib
 ```
 
 默认裁剪未使用或体积较大的扩展：
 
 ```text
-bz2,exif,gd,gettext,gmp,imagick,mongodb,mysqli,readline,session,soap,
-sqlite3,xlswriter,xsl,yaml
+bz2,exif,gd,gettext,gmp,imagick,intl,mongodb,mysqli,opcache,readline,
+session,soap,sqlite3,xlswriter,xsl,yaml
 ```
 
-说明：Swoole CLI 的 `+xml` 构建项会同时启用 `dom/simplexml/xmlreader/xmlwriter`；这些能力会在运行时校验中验证，但不会作为独立 `prepare.php +xxx` 参数传入。
+说明：Swoole CLI 的 `+xml` 构建项会同时启用 `dom/simplexml/xmlreader/xmlwriter`；`json/hash/pcre/reflection/PDO/libxml` 等属于 PHP core 或依赖扩展带出的基础能力，不作为独立 `prepare.php +xxx` 参数传入。`intl/opcache` 当前不是 HyperfAdmin 必需项，默认不打包。
 
 ## 自动发布
 
@@ -87,9 +87,10 @@ PHPSFX_SWOOLE_CLI_REF=v6.2.0.0 \
 
 构建完成后输出到 `dist/`。
 
-如果本地已经安装了同版本 Swoole CLI（例如 `/usr/local/bin/php` 输出 `Swoole 6.2.0`），可以先导入为 phpsfx 标准命名产物，用于快速验证下游打包链路：
+如果本地已经安装了同版本 Swoole CLI（例如 `/usr/local/bin/php` 输出 `Swoole 6.2.0`），可以先导入为 phpsfx 标准命名产物，用于快速验证下游打包链路。注意官方 full runtime 通常包含 `gd/mongodb/sqlite3/opcache` 等额外扩展，导入时如只是本地调试可显式允许额外扩展；正式发布仍应使用源码构建的 slim 产物：
 
 ```bash
+PHPSFX_ALLOW_EXTRA_EXTENSIONS=1 \
 PHPSFX_SWOOLE_CLI_REF=v6.2.0.0 \
   bash scripts/import-swoole-cli.sh linux-x64 /usr/local/bin/php
 ```
@@ -115,13 +116,15 @@ PHPSFX_SWOOLE_CLI_PREPARE_FLAGS='+redis +swoole +pdo_mysql +xml -mongodb -sqlite
 - `PHP_VERSION` 以目标版本前缀开头。
 - `PHP_SAPI === "cli"`。
 - `SWOOLE_CLI` 常量存在。
-- `swoole`、`redis`、`pdo_mysql`、`openssl`、`curl`、`mbstring`、`phar`、`zlib`、`intl`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter` 已加载。
+- `swoole`、`redis`、`pdo_mysql`、`openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter` 等必需扩展已加载。
+- `bz2/exif/gd/gettext/gmp/imagick/intl/mongodb/mysqli/opcache/readline/session/soap/sqlite3/xlswriter/xsl/yaml` 等未使用扩展未被打包。
 
 手动校验已有产物：
 
 ```bash
 PHPSFX_EXPECTED_PHP_PREFIX=8.4. \
-PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,intl,zip \
+PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter \
+PHPSFX_FORBIDDEN_EXTENSIONS=bz2,exif,gd,gettext,gmp,imagick,intl,mongodb,mysqli,opcache,readline,session,soap,sqlite3,xlswriter,xsl,yaml \
   bash scripts/validate-swoole-cli.sh dist/swoole-cli-php8.4-linux-x64
 ```
 

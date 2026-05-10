@@ -14,6 +14,17 @@ USAGE
 fi
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+PROFILE_FILE=${PHPSFX_PROFILE_FILE:-"${ROOT_DIR}/scripts/profiles/hyperfadmin-slim.env"}
+if [[ -n "${PROFILE_FILE}" && "${PROFILE_FILE}" != "none" ]]; then
+  [[ "${PROFILE_FILE}" = /* ]] || PROFILE_FILE="${ROOT_DIR}/${PROFILE_FILE}"
+  if [[ ! -f "${PROFILE_FILE}" ]]; then
+    echo "Profile file does not exist: ${PROFILE_FILE}" >&2
+    exit 1
+  fi
+  # shellcheck source=/dev/null
+  source "${PROFILE_FILE}"
+fi
+
 if [[ $# -eq 1 ]]; then
   PLATFORM=${PHPSFX_PLATFORM:-linux-x64}
   SOURCE_BIN=$1
@@ -25,8 +36,10 @@ fi
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
 SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
 DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist"}
-EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,intl,zip,dom,simplexml,xmlreader,xmlwriter}
-DEFAULT_EXTENSIONS='bcmath,ctype,curl,dom,fileinfo,filter,iconv,intl,mbstring,openssl,pcntl,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib,opcache'
+PROFILE_NAME=${PHPSFX_PROFILE_NAME:-hyperfadmin-slim}
+EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,sodium,sockets}
+FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-bz2,exif,gd,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,sqlite3,xlswriter,xsl,yaml,opcache}
+DEFAULT_EXTENSIONS='bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,openssl,pcntl,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
 
 case "${PLATFORM}" in
   linux-x64|linux-a64|macos-x64|macos-a64) ;;
@@ -51,6 +64,7 @@ chmod +x "${DIST_DIR}/${ASSET_NAME}"
 
 PHPSFX_EXPECTED_PHP_PREFIX="${PHP_VERSION}." \
 PHPSFX_REQUIRED_EXTENSIONS="${EXPECTED_EXTENSIONS}" \
+PHPSFX_FORBIDDEN_EXTENSIONS="${FORBIDDEN_EXTENSIONS}" \
   bash "${ROOT_DIR}/scripts/validate-swoole-cli.sh" "${DIST_DIR}/${ASSET_NAME}"
 
 PHP_FULL_VERSION=$("${DIST_DIR}/${ASSET_NAME}" -r 'echo PHP_VERSION;')
@@ -61,11 +75,13 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
 {
   "platform": "${PLATFORM}",
   "asset": "${ASSET_NAME}",
+  "profile": "${PROFILE_NAME}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",
   "extensions": "${PHPSFX_EXTENSIONS:-${DEFAULT_EXTENSIONS}}",
   "required_extensions": "${EXPECTED_EXTENSIONS}",
+  "forbidden_extensions": "${FORBIDDEN_EXTENSIONS}",
   "swoole_cli_repo": "https://github.com/swoole/swoole-cli.git",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
   "swoole_cli_commit": "prebuilt-local",
