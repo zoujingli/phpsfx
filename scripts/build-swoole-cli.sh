@@ -739,6 +739,9 @@ replacements = {
     "neg.c": {
         "char\nbc_is_neg (num)\n     bc_num num;\n": "char\nbc_is_neg (bc_num num)\n",
     },
+    "num2str.c": {
+        "zend_string\n*bc_num2str_ex (num, scale)\n      bc_num num;\n\t  int scale;\n": "zend_string\n*bc_num2str_ex (bc_num num, int scale)\n",
+    },
     "num2long.c": {
         "long\nbc_num2long (num)\n     bc_num num;\n": "long\nbc_num2long (bc_num num)\n",
     },
