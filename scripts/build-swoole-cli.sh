@@ -380,10 +380,14 @@ config = config.replace(
 config_path.write_text(config, encoding="utf-8")
 
 cli = cli_path.read_text(encoding="utf-8")
-cli = cli.replace(
-    "\tcase 'P':\n\t\t\treturn fpm_main(argc, argv);\n\t\tdefault:",
-    "\tcase 'P':\n#ifndef SWOOLE_CLI_NO_FPM\n\t\t\treturn fpm_main(argc, argv);\n#else\n\t\t\tphp_cli_usage(argv[0]);\n\t\t\treturn FAILURE;\n#endif\n\t\tdefault:",
+cli, fpm_case_count = re.subn(
+    r"case 'P':\s*return fpm_main\(argc, argv\);\s*default:",
+    "case 'P':\n#ifndef SWOOLE_CLI_NO_FPM\n\t\t\treturn fpm_main(argc, argv);\n#else\n\t\t\tphp_cli_usage(argv[0]);\n\t\t\treturn FAILURE;\n#endif\n\t\tdefault:",
+    cli,
+    count=1,
 )
+if fpm_case_count != 1:
+    raise RuntimeError("Unable to patch php-fpm -P entry in sapi/cli/php_cli.c")
 cli_path.write_text(cli, encoding="utf-8")
 PY
     echo "Applied php-fpm disabled runtime profile" >&2
