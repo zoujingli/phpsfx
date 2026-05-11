@@ -32,29 +32,29 @@ swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 
 ## 内置扩展与裁剪
 
-默认使用 `scripts/profiles/hyperfadmin-slim.env`，只保留 SFX、Swoole 服务、Phar 发布、数据库与基础网络能力常用扩展：
+默认使用 `scripts/profiles/hyperfadmin-slim.env`，只保留 SFX、Swoole 服务、Phar 发布、数据库、基础网络、图片处理、二维码压缩和 OPcache 常用扩展：
 
 ```text
-bcmath,ctype,curl,dom,fileinfo,filter,iconv,mbstring,openssl,pcntl,
-pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,
-xml,xmlreader,xmlwriter,zip,zlib
+bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,
+openssl,pcntl,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,
+swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib
 ```
 
 默认裁剪未使用或体积较大的扩展：
 
 ```text
-bz2,exif,gd,gettext,gmp,imagick,intl,mongodb,mysqli,opcache,readline,
-session,soap,sqlite3,xlswriter,xsl,yaml
+exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,
+sqlite3,xlswriter,xsl,yaml
 ```
 
-说明：Swoole CLI 的 `+xml` 构建项会同时启用 `dom/simplexml/xmlreader/xmlwriter`；`json/hash/pcre/reflection/PDO/libxml` 等属于 PHP core 或依赖扩展带出的基础能力，不作为独立 `prepare.php +xxx` 参数传入。`intl/opcache` 默认不打包。
+说明：Swoole CLI 的 `+xml` 构建项会同时启用 `dom/simplexml/xmlreader/xmlwriter`；`json/hash/pcre/reflection/PDO/libxml` 等属于 PHP core 或依赖扩展带出的基础能力，不作为独立 `prepare.php +xxx` 参数传入。`intl` 默认不打包，`bz2/gd/opcache` 作为 dmskc 标准能力保留。
 
 构建脚本还会把 Swoole CLI 上游默认的 full profile 收敛为 `PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS`，并进一步裁剪底层依赖：
 
 - Swoole 扩展：保留 server/coroutine/curl hook/mysqlnd/c-ares DNS，默认不启用 `pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd` 等未使用功能。
 - libcurl：保留 HTTP(S)、OpenSSL、zlib、c-ares，默认不启用 HTTP3、SSH2、IDN、PSL、Brotli、Zstd。
-- libzip：保留 Zip + zlib + OpenSSL，默认不启用 BZip2、LZMA、Zstd。
-- zlib：移除上游模板中与 zlib 构建无关的 BZip2 依赖。
+- libzip：保留 Zip + zlib + OpenSSL，默认不启用 LZMA、Zstd。
+- zlib：移除上游模板中与 zlib 构建无关的额外依赖。
 - redis：默认关闭 redis session 支持，因为本运行时不打包 PHP `session` 扩展。
 - oniguruma：使用 6.9.10 release tarball，并在 macOS 构建时兼容新版 clang 对旧版函数指针告警的严格处理。
 
@@ -98,7 +98,7 @@ PHPSFX_SWOOLE_CLI_REF=v6.2.0.0 \
 
 构建完成后输出到 `dist/`。
 
-如果本地已经安装了同版本 Swoole CLI（例如 `/usr/local/bin/php` 输出 `Swoole 6.2.0`），可以先导入为 phpsfx 标准命名产物，用于快速验证下游打包链路。注意官方 full runtime 通常包含 `gd/mongodb/sqlite3/opcache` 等额外扩展，导入时如只是本地调试可显式允许额外扩展；正式发布仍应使用源码构建的 slim 产物：
+如果本地已经安装了同版本 Swoole CLI（例如 `/usr/local/bin/php` 输出 `Swoole 6.2.0`），可以先导入为 phpsfx 标准命名产物，用于快速验证下游打包链路。注意官方 full runtime 通常包含 `mongodb/sqlite3/imagick` 等额外扩展，导入时如只是本地调试可显式允许额外扩展；正式发布仍应使用源码构建的 slim 产物：
 
 ```bash
 PHPSFX_ALLOW_EXTRA_EXTENSIONS=1 \
@@ -127,15 +127,15 @@ PHPSFX_SWOOLE_CLI_PREPARE_FLAGS='+redis +swoole +pdo_mysql +xml -mongodb -sqlite
 - `PHP_VERSION` 以目标版本前缀开头。
 - `PHP_SAPI === "cli"`。
 - `SWOOLE_CLI` 常量存在。
-- `swoole`、`redis`、`pdo_mysql`、`openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter` 等必需扩展已加载。
-- `bz2/exif/gd/gettext/gmp/imagick/intl/mongodb/mysqli/opcache/readline/session/soap/sqlite3/xlswriter/xsl/yaml` 等未使用扩展未被打包。
+- `swoole`、`redis`、`pdo_mysql`、`openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter`、`bz2`、`gd`、`opcache` 等必需扩展已加载。
+- `exif/gettext/gmp/imagick/intl/mongodb/mysqli/readline/session/soap/sqlite3/xlswriter/xsl/yaml` 等未使用扩展未被打包。
 
 手动校验已有产物：
 
 ```bash
 PHPSFX_EXPECTED_PHP_PREFIX=8.4. \
-PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter \
-PHPSFX_FORBIDDEN_EXTENSIONS=bz2,exif,gd,gettext,gmp,imagick,intl,mongodb,mysqli,opcache,readline,session,soap,sqlite3,xlswriter,xsl,yaml \
+PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,bz2,gd,opcache \
+PHPSFX_FORBIDDEN_EXTENSIONS=exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,sqlite3,xlswriter,xsl,yaml \
   bash scripts/validate-swoole-cli.sh dist/swoole-cli-php8.4-linux-x64
 ```
 
