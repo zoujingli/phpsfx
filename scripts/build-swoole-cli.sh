@@ -16,7 +16,6 @@ fi
 
 PLATFORM=${1:-${PHPSFX_PLATFORM:-}}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
-PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.4.21}
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
 SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
 SWOOLE_CLI_DIR=${PHPSFX_SWOOLE_CLI_DIR:-"${ROOT_DIR}/.build/swoole-cli"}
@@ -45,7 +44,6 @@ Platforms:
 
 Important environment variables:
   PHPSFX_PHP_VERSION                 PHP version prefix used for asset name and validation, default: 8.4
-  PHPSFX_PHP_FULL_VERSION            Optional exact PHP patch version, e.g. 8.4.21; patches Swoole CLI PHP-VERSION.conf
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
   PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.2.0.0
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
@@ -166,27 +164,6 @@ checkout_swoole_cli() {
   # 清理上一次构建输出，但保留 pool/ 下载缓存，方便本地和 CI cache 复用依赖源码。
   rm -f make.sh
   rm -rf bin/swoole-cli bin/dist thirdparty var/php-* modules libs libphp.la
-}
-
-apply_php_version_override() {
-  local current_php_version
-  current_php_version=$(tr -d '[:space:]' < sapi/PHP-VERSION.conf)
-  if [[ -z "${PHP_FULL_VERSION}" ]]; then
-    PHP_FULL_VERSION="${current_php_version}"
-    return
-  fi
-  if [[ "${PHP_FULL_VERSION}" != "${PHP_VERSION}."* ]]; then
-    cat >&2 <<ERROR
-PHPSFX_PHP_FULL_VERSION=${PHP_FULL_VERSION} does not match PHPSFX_PHP_VERSION=${PHP_VERSION}.
-Please keep PHPSFX_PHP_VERSION as the major.minor asset line, for example 8.4, and use PHPSFX_PHP_FULL_VERSION for patch version.
-ERROR
-    exit 1
-  fi
-  if [[ "${PHP_FULL_VERSION}" != "${current_php_version}" ]]; then
-    # Swoole CLI tag 更新通常滞后于 PHP 安全补丁版；同一 PHP minor 线可覆盖源码版本以构建安全补丁运行时。
-    printf '%s\n' "${PHP_FULL_VERSION}" > sapi/PHP-VERSION.conf
-    echo "Patched Swoole CLI PHP version: ${current_php_version} -> ${PHP_FULL_VERSION}" >&2
-  fi
 }
 
 assert_target_php_version() {
@@ -563,7 +540,6 @@ if [[ -d .git ]]; then
 else
   SWOOLE_CLI_COMMIT="${SWOOLE_CLI_REF} (archive)"
 fi
-apply_php_version_override
 assert_target_php_version
 prime_swoole_extension_archive
 apply_profile_patches
@@ -607,7 +583,6 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
   "asset": "${ASSET_NAME}",
   "profile": "${PROFILE_NAME}",
   "php_version": "${PHP_VERSION}",
-  "php_full_version": "${PHP_FULL_VERSION}",
   "extensions": "${PHPSFX_EXTENSIONS:-${DEFAULT_EXTENSIONS}}",
   "required_extensions": "${EXPECTED_EXTENSIONS}",
   "forbidden_extensions": "${FORBIDDEN_EXTENSIONS}",
