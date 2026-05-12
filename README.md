@@ -84,6 +84,8 @@ https://github.com/swoole/swoole-cli.git
 
 默认 `swoole_cli_ref=v6.2.0.0`。如果未来要固定官方 tag 或提交，可在 workflow 手动输入，或设置环境变量 `PHPSFX_SWOOLE_CLI_REF`。
 
+`v6.2.0.0` 上游默认 PHP 版本为 `8.4.14`；构建脚本默认使用 `PHPSFX_PHP_FULL_VERSION=8.4.21` 覆盖 `sapi/PHP-VERSION.conf`，用于构建 PHP 8.4 安全补丁运行时。产物命名仍保留 `php8.4` 线，例如 `swoole-cli-php8.4-linux-x64`，完整补丁版本会写入 `build-meta.json` 的 `php_full_version`。
+
 ## 本地 / WSL 调试
 
 WSL 或 Linux x86_64 本地只构建当前平台：
@@ -92,6 +94,7 @@ WSL 或 Linux x86_64 本地只构建当前平台：
 cd /mnt/d/WebRoot/phpsfx
 PHPSFX_PLATFORM=linux-x64 \
 PHPSFX_PHP_VERSION=8.4 \
+PHPSFX_PHP_FULL_VERSION=8.4.21 \
 PHPSFX_SWOOLE_CLI_REF=v6.2.0.0 \
   bash scripts/build-swoole-cli.sh
 ```
