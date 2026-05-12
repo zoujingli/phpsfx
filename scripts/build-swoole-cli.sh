@@ -18,6 +18,7 @@ PLATFORM=${1:-${PHPSFX_PLATFORM:-}}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
 PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.4.21}
 PHP_SOURCE_SYNC_REQUIRED=0
+PHP_ARCHIVE_SHA256SUM=${PHPSFX_PHP_ARCHIVE_SHA256SUM:-}
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
 SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
 SWOOLE_CLI_DIR=${PHPSFX_SWOOLE_CLI_DIR:-"${ROOT_DIR}/.build/swoole-cli"}
@@ -63,6 +64,7 @@ Important environment variables:
   PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
   PHPSFX_DOWNLOAD_MIRROR_URL         Optional Swoole CLI dependency mirror URL passed to prepare.php
+  PHPSFX_PHP_ARCHIVE_SHA256SUM       Optional php-src GitHub tag archive sha256 when overriding PHP patch version
   PHPSFX_DIST_DIR                    Output directory, default: ./dist
   PHPSFX_SWOOLE_CLI_DIR              Swoole CLI checkout dir, default: ./.build/swoole-cli
 USAGE
@@ -190,6 +192,47 @@ ERROR
     PHP_SOURCE_SYNC_REQUIRED=1
     echo "Patched Swoole CLI PHP version: ${current_php_version} -> ${PHP_FULL_VERSION}" >&2
   fi
+}
+
+default_php_archive_sha256sum() {
+  case "$1" in
+    # Swoole CLI v6.2.0.0 内置 PHP 8.4.14，上游脚本原始校验值保留在这里便于回退。
+    8.4.14) echo "22bd132176a2ff5140dd38d30213364ce1119edda4521280d5249bc1f55721e9" ;;
+    # GitHub php-src tag archive: https://github.com/php/php-src/archive/refs/tags/php-8.4.21.tar.gz
+    8.4.21) echo "2f2ff003d72d26c4548f95c0c91246111e118f7d7e82bcfeed1fca1574fdc170" ;;
+    *) echo "" ;;
+  esac
+}
+
+patch_php_archive_hash() {
+  local downloader_file patched_file
+  [[ "${PHP_SOURCE_SYNC_REQUIRED}" == "1" ]] || return 0
+
+  if [[ -z "${PHP_ARCHIVE_SHA256SUM}" ]]; then
+    PHP_ARCHIVE_SHA256SUM=$(default_php_archive_sha256sum "${PHP_FULL_VERSION}")
+  fi
+
+  if [[ -z "${PHP_ARCHIVE_SHA256SUM}" ]]; then
+    cat >&2 <<ERROR
+PHP ${PHP_FULL_VERSION} needs php-src archive sync, but its sha256 is not configured.
+Please set PHPSFX_PHP_ARCHIVE_SHA256SUM to the sha256 of:
+https://github.com/php/php-src/archive/refs/tags/php-${PHP_FULL_VERSION}.tar.gz
+ERROR
+    exit 1
+  fi
+
+  downloader_file="${SWOOLE_CLI_DIR}/sapi/scripts/download-php-src-archive.php"
+  patched_file="${downloader_file}.tmp.$$"
+  awk -v hash="${PHP_ARCHIVE_SHA256SUM}" '
+    /^\$php_archive_file_sha256sum = / && !done {
+      print "$php_archive_file_sha256sum = '\''" hash "'\'';"
+      done = 1
+      next
+    }
+    { print }
+  ' "${downloader_file}" > "${patched_file}"
+  mv "${patched_file}" "${downloader_file}"
+  echo "Patched php-src archive sha256 for PHP ${PHP_FULL_VERSION}: ${PHP_ARCHIVE_SHA256SUM}" >&2
 }
 
 assert_target_php_version() {
@@ -568,6 +611,7 @@ else
 fi
 apply_php_version_override
 assert_target_php_version
+patch_php_archive_hash
 prime_swoole_extension_archive
 apply_profile_patches
 mkdir -p "${GLOBAL_PREFIX}"
@@ -587,6 +631,11 @@ if [[ "${PHP_SOURCE_SYNC_REQUIRED}" == "1" ]]; then
   # prepare.php 只按 PHP-VERSION.conf 生成 make.sh；真正替换补丁版 PHP 源码要走上游 sync 流程。
   # 若跳过这里，产物元数据会显示新补丁号，但二进制仍可能是 Swoole CLI tag 内置的旧 PHP。
   bash ./make.sh sync
+  synced_php_version=$(sed -n 's/^#define PHP_VERSION "\(.*\)"/\1/p' main/php_version.h | head -1)
+  if [[ "${synced_php_version}" != "${PHP_FULL_VERSION}" ]]; then
+    echo "php-src sync failed: expected PHP ${PHP_FULL_VERSION}, got ${synced_php_version:-unknown}" >&2
+    exit 1
+  fi
 fi
 
 bash ./make.sh all-library
@@ -617,6 +666,7 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
   "profile": "${PROFILE_NAME}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
+  "php_archive_sha256": "${PHP_ARCHIVE_SHA256SUM}",
   "extensions": "${PHPSFX_EXTENSIONS:-${DEFAULT_EXTENSIONS}}",
   "required_extensions": "${EXPECTED_EXTENSIONS}",
   "forbidden_extensions": "${FORBIDDEN_EXTENSIONS}",
