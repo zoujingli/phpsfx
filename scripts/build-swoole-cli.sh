@@ -17,6 +17,7 @@ fi
 PLATFORM=${1:-${PHPSFX_PLATFORM:-}}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
 PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.4.21}
+PHP_SOURCE_SYNC_REQUIRED=0
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
 SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
 SWOOLE_CLI_DIR=${PHPSFX_SWOOLE_CLI_DIR:-"${ROOT_DIR}/.build/swoole-cli"}
@@ -183,8 +184,10 @@ ERROR
     exit 1
   fi
   if [[ "${PHP_FULL_VERSION}" != "${current_php_version}" ]]; then
-    # Swoole CLI tag 更新通常滞后于 PHP 安全补丁版；同一 PHP minor 线可覆盖源码版本以构建安全补丁运行时。
+    # Swoole CLI tag 更新通常滞后于 PHP 安全补丁版；同一 PHP minor 线可覆盖源码版本，
+    # 但覆盖配置后还必须执行 make.sh sync，把 php-src 补丁源码同步到当前 Swoole CLI 工作树。
     printf '%s\n' "${PHP_FULL_VERSION}" > sapi/PHP-VERSION.conf
+    PHP_SOURCE_SYNC_REQUIRED=1
     echo "Patched Swoole CLI PHP version: ${current_php_version} -> ${PHP_FULL_VERSION}" >&2
   fi
 }
@@ -580,6 +583,12 @@ if [[ -n "${DOWNLOAD_MIRROR_URL}" ]]; then
 fi
 php prepare.php --without-docker=1 --with-parallel-jobs="${JOBS}" --with-global-prefix="${GLOBAL_PREFIX}" "${PREPARE_ARGS[@]}"
 
+if [[ "${PHP_SOURCE_SYNC_REQUIRED}" == "1" ]]; then
+  # prepare.php 只按 PHP-VERSION.conf 生成 make.sh；真正替换补丁版 PHP 源码要走上游 sync 流程。
+  # 若跳过这里，产物元数据会显示新补丁号，但二进制仍可能是 Swoole CLI tag 内置的旧 PHP。
+  bash ./make.sh sync
+fi
+
 bash ./make.sh all-library
 bash ./make.sh config
 bash ./make.sh build
@@ -594,7 +603,7 @@ ASSET_NAME="swoole-cli-php${PHP_VERSION}-${PLATFORM}"
 cp "${SWOOLE_CLI_BIN}" "${DIST_DIR}/${ASSET_NAME}"
 chmod +x "${DIST_DIR}/${ASSET_NAME}"
 
-PHPSFX_EXPECTED_PHP_PREFIX="${PHP_VERSION}." \
+PHPSFX_EXPECTED_PHP_PREFIX="${PHP_FULL_VERSION:-${PHP_VERSION}.}" \
 PHPSFX_REQUIRED_EXTENSIONS="${EXPECTED_EXTENSIONS}" \
 PHPSFX_FORBIDDEN_EXTENSIONS="${FORBIDDEN_EXTENSIONS}" \
   bash "${ROOT_DIR}/scripts/validate-swoole-cli.sh" "${DIST_DIR}/${ASSET_NAME}"

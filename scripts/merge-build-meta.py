@@ -32,6 +32,9 @@ def main() -> int:
 
     first = platforms[0]
     php_versions = sorted({str(item.get("php_version", "")) for item in platforms if item.get("php_version", "")})
+    php_full_versions = sorted(
+        {str(item.get("php_full_version", "")) for item in platforms if item.get("php_full_version", "")}
+    )
     profiles = sorted({str(item.get("profile", "")) for item in platforms if item.get("profile", "")})
     swoole_cli_refs = sorted({str(item.get("swoole_cli_ref", "")) for item in platforms if item.get("swoole_cli_ref", "")})
     profile_components = {
@@ -52,6 +55,7 @@ def main() -> int:
         "profiles": profiles,
         "profile_components": profile_components,
         "php_versions": php_versions,
+        "php_full_versions": php_full_versions,
         "swoole_cli_refs": swoole_cli_refs,
         "extensions": env_or_default("PHPSFX_EXTENSIONS", first.get("extensions", "")) if len(profiles) <= 1 else "",
         "required_extensions": env_or_default("PHPSFX_REQUIRED_EXTENSIONS", first.get("required_extensions", "")) if len(profiles) <= 1 else "",
