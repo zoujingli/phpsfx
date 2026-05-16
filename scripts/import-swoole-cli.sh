@@ -9,6 +9,10 @@ Usage: scripts/import-swoole-cli.sh [platform] <swoole-cli-binary>
 Import an already built Swoole CLI runtime into dist/ using the same phpsfx asset naming,
 then validate it and generate build-meta-<platform>.json. This is intended for local smoke
 tests against the recommended upstream release when the runtime is already installed.
+
+Environment:
+  PHPSFX_SWOOLE_CLI_REF     Swoole CLI ref recorded in metadata, default: v6.2.0.0
+  PHPSFX_SWOOLE_SRC_REF     swoole-src ref recorded in metadata, default: v6.2.1
 USAGE
   exit 2
 fi
@@ -35,6 +39,10 @@ fi
 
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
 SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
+SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.1}
+if [[ "${SWOOLE_SRC_REF}" =~ ^[0-9]+(\.[0-9]+)+([._-].*)?$ ]]; then
+  SWOOLE_SRC_REF="v${SWOOLE_SRC_REF}"
+fi
 DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist"}
 PROFILE_NAME=${PHPSFX_PROFILE_NAME:-hyperfadmin-slim}
 EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,bz2,gd,opcache,sodium,sockets}
@@ -84,6 +92,7 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
   "forbidden_extensions": "${FORBIDDEN_EXTENSIONS}",
   "swoole_cli_repo": "https://github.com/swoole/swoole-cli.git",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
+  "swoole_src_ref": "${SWOOLE_SRC_REF}",
   "swoole_cli_commit": "prebuilt-local",
   "prepare_flags": "prebuilt-local",
   "source_binary": "${SOURCE_BIN}",

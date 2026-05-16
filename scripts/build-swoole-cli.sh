@@ -18,6 +18,7 @@ PLATFORM=${1:-${PHPSFX_PLATFORM:-}}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
 SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
+SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.1}
 SWOOLE_CLI_DIR=${PHPSFX_SWOOLE_CLI_DIR:-"${ROOT_DIR}/.build/swoole-cli"}
 DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist"}
 HOST_JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
@@ -46,6 +47,7 @@ Important environment variables:
   PHPSFX_PHP_VERSION                 PHP version prefix used for asset name and validation, default: 8.4
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
   PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.2.0.0
+  PHPSFX_SWOOLE_SRC_REF              swoole-src tag, branch, or commit, default: v6.2.1
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
   PHPSFX_REQUIRED_EXTENSIONS         Comma-separated runtime extensions checked after build
   PHPSFX_FORBIDDEN_EXTENSIONS        Comma-separated extensions that must not be loaded
@@ -179,9 +181,20 @@ ERROR
 }
 
 prime_swoole_extension_archive() {
-  local swoole_version tgz_file archive_url tmp_file first_entry helper_script helper_tmp
-  swoole_version=$(tr -d '[:space:]' < sapi/SWOOLE-VERSION.conf)
-  tgz_file="${SWOOLE_CLI_DIR}/pool/ext/swoole-${swoole_version}.tgz"
+  local configured_swoole_version swoole_version normalized_swoole_version swoole_archive_file_ref current_swoole_version tgz_file archive_url tmp_file first_entry helper_script helper_tmp
+  configured_swoole_version=$(tr -d '[:space:]' < sapi/SWOOLE-VERSION.conf)
+  swoole_version=${SWOOLE_SRC_REF:-${configured_swoole_version}}
+  if [[ "${swoole_version}" =~ ^[0-9]+(\.[0-9]+)+([._-].*)?$ ]]; then
+    swoole_version="v${swoole_version}"
+  fi
+  SWOOLE_SRC_REF=${swoole_version}
+  normalized_swoole_version=${swoole_version#v}
+  swoole_archive_file_ref=${swoole_version//[^A-Za-z0-9._-]/_}
+  if [[ "${configured_swoole_version}" != "${swoole_version}" ]]; then
+    printf '%s\n' "${swoole_version}" > sapi/SWOOLE-VERSION.conf
+    echo "Overrode Swoole CLI bundled swoole-src ref ${configured_swoole_version} -> ${swoole_version}" >&2
+  fi
+  tgz_file="${SWOOLE_CLI_DIR}/pool/ext/swoole-${swoole_archive_file_ref}.tgz"
 
   # 上游 download-swoole-src-archive.sh 在部分 runner 上会被 sh 执行，导致 [[ 语法失败后重新 clone swoole-src。
   # 这里提前生成 prepare.php 期望的 tgz，并主动展开 ext/swoole，避免 archive checkout 的空子模块目录
@@ -198,9 +211,15 @@ prime_swoole_extension_archive() {
   fi
 
   mkdir -p "$(dirname "${tgz_file}")"
-  if [[ ! -s "${tgz_file}" && -f "${SWOOLE_CLI_DIR}/ext/swoole/CMakeLists.txt" ]]; then
-    echo "Priming swoole-src archive from checked-out submodule: ${tgz_file}" >&2
-    tar -czf "${tgz_file}" -C "${SWOOLE_CLI_DIR}/ext/swoole" .
+  if [[ -f "${SWOOLE_CLI_DIR}/ext/swoole/CMakeLists.txt" ]]; then
+    current_swoole_version=$(grep -E '^[[:space:]]*set\(SWOOLE_VERSION[[:space:]]+' "${SWOOLE_CLI_DIR}/ext/swoole/CMakeLists.txt" | awk 'NR == 1 { print $2 }' | sed 's/[)]//g' || true)
+    if [[ "${current_swoole_version#v}" != "${normalized_swoole_version}" ]]; then
+      echo "Removing stale ext/swoole ${current_swoole_version:-unknown}; target is ${swoole_version}" >&2
+      rm -rf "${SWOOLE_CLI_DIR}/ext/swoole"
+    elif [[ ! -s "${tgz_file}" ]]; then
+      echo "Priming swoole-src archive from checked-out submodule: ${tgz_file}" >&2
+      tar -czf "${tgz_file}" -C "${SWOOLE_CLI_DIR}/ext/swoole" .
+    fi
   fi
 
   if [[ ! -s "${tgz_file}" ]]; then
@@ -595,6 +614,7 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
   "oniguruma_clang_compat": "${PHPSFX_ONIGURUMA_CLANG_COMPAT:-0}",
   "swoole_cli_repo": "${SWOOLE_CLI_REPO}",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
+  "swoole_src_ref": "${SWOOLE_SRC_REF}",
   "swoole_cli_commit": "${SWOOLE_CLI_COMMIT}",
   "prepare_flags": "${PREPARE_FLAGS}",
   "global_prefix": "${GLOBAL_PREFIX}",

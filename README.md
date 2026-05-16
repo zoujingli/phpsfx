@@ -80,9 +80,10 @@ git push origin v0.1.0
 
 ```text
 https://github.com/swoole/swoole-cli.git
+https://github.com/swoole/swoole-src.git
 ```
 
-默认 `swoole_cli_ref=v6.2.0.0`。如果未来要固定官方 tag 或提交，可在 workflow 手动输入，或设置环境变量 `PHPSFX_SWOOLE_CLI_REF`。
+默认 `swoole_cli_ref=v6.2.0.0`，构建脚本会覆盖使用 `swoole-src v6.2.1`。如果未来要固定官方 tag 或提交，可设置环境变量 `PHPSFX_SWOOLE_CLI_REF` / `PHPSFX_SWOOLE_SRC_REF`。
 
 ## 本地 / WSL 调试
 
@@ -93,16 +94,18 @@ cd /mnt/d/WebRoot/phpsfx
 PHPSFX_PLATFORM=linux-x64 \
 PHPSFX_PHP_VERSION=8.4 \
 PHPSFX_SWOOLE_CLI_REF=v6.2.0.0 \
+PHPSFX_SWOOLE_SRC_REF=v6.2.1 \
   bash scripts/build-swoole-cli.sh
 ```
 
 构建完成后输出到 `dist/`。
 
-如果本地已经安装了同版本 Swoole CLI（例如 `/usr/local/bin/php` 输出 `Swoole 6.2.0`），可以先导入为 phpsfx 标准命名产物，用于快速验证下游打包链路。注意官方 full runtime 通常包含 `mongodb/sqlite3/imagick` 等额外扩展，导入时如只是本地调试可显式允许额外扩展；正式发布仍应使用源码构建的 slim 产物：
+如果本地已经安装了同版本 Swoole CLI（例如 `/usr/local/bin/php` 输出 `Swoole 6.2.1`），可以先导入为 phpsfx 标准命名产物，用于快速验证下游打包链路。注意官方 full runtime 通常包含 `mongodb/sqlite3/imagick` 等额外扩展，导入时如只是本地调试可显式允许额外扩展；正式发布仍应使用源码构建的 slim 产物：
 
 ```bash
 PHPSFX_ALLOW_EXTRA_EXTENSIONS=1 \
 PHPSFX_SWOOLE_CLI_REF=v6.2.0.0 \
+PHPSFX_SWOOLE_SRC_REF=v6.2.1 \
   bash scripts/import-swoole-cli.sh linux-x64 /usr/local/bin/php
 ```
 
