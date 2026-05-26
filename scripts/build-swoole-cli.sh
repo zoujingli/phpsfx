@@ -29,11 +29,11 @@ if [[ "${GITHUB_ACTIONS:-}" == "true" && -z "${PHPSFX_BUILD_JOBS:-}" ]]; then
 fi
 JOBS=${PHPSFX_BUILD_JOBS:-${DEFAULT_JOBS}}
 PROFILE_NAME=${PHPSFX_PROFILE_NAME:-hyperfadmin-slim}
-DEFAULT_EXTENSIONS='bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,openssl,pcntl,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
-DEFAULT_PREPARE_FLAGS='+bcmath +bz2 +ctype +curl +fileinfo +filter +gd +iconv +mbstring +opcache +openssl +pcntl +pdo_mysql +phar +posix +redis +sockets +sodium +swoole +tokenizer +xml +zip +zlib -exif -gettext -gmp -imagick -intl -mongodb -mysqli -readline -session -soap -sqlite3 -xlswriter -xsl -yaml'
+DEFAULT_EXTENSIONS='bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,openssl,pcntl,pdo_mysql,pdo_sqlite,phar,posix,redis,simplexml,sockets,sodium,sqlite3,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
+DEFAULT_PREPARE_FLAGS='+bcmath +bz2 +ctype +curl +fileinfo +filter +gd +iconv +mbstring +opcache +openssl +pcntl +pdo_mysql +pdo_sqlite +phar +posix +redis +sockets +sodium +sqlite3 +swoole +tokenizer +xml +zip +zlib -exif -gettext -gmp -imagick -intl -mongodb -mysqli -readline -session -soap -xlswriter -xsl -yaml'
 PREPARE_FLAGS=${PHPSFX_SWOOLE_CLI_PREPARE_FLAGS:-${DEFAULT_PREPARE_FLAGS}}
-EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,bz2,gd,opcache,sodium,sockets}
-FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,sqlite3,xlswriter,xsl,yaml}
+EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,pdo_sqlite,sqlite3,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,bz2,gd,opcache,sodium,sockets}
+FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,xlswriter,xsl,yaml}
 DOWNLOAD_MIRROR_URL=${PHPSFX_DOWNLOAD_MIRROR_URL:-}
 
 usage() {
@@ -254,11 +254,35 @@ prime_swoole_extension_archive() {
   echo "Prepared swoole-src ${swoole_version}: ${tgz_file}" >&2
 }
 
+prime_pdo_sqlite_extension_source() {
+  local php_source_dir
+
+  if [[ -f "${SWOOLE_CLI_DIR}/ext/pdo_sqlite/config.m4" ]]; then
+    return 0
+  fi
+
+  echo "Priming PHP pdo_sqlite extension source" >&2
+  require_command curl
+  php_source_dir=$(
+    cd "${SWOOLE_CLI_DIR}"
+    php -r 'ob_start(); $dir = require "sapi/scripts/download-php-src-archive.php"; fwrite(STDERR, ob_get_clean()); echo $dir;'
+  )
+
+  if [[ ! -f "${php_source_dir}/ext/pdo_sqlite/config.m4" ]]; then
+    echo "pdo_sqlite source is missing in PHP source tree: ${php_source_dir}/ext/pdo_sqlite" >&2
+    exit 1
+  fi
+
+  rm -rf "${SWOOLE_CLI_DIR}/ext/pdo_sqlite"
+  mkdir -p "${SWOOLE_CLI_DIR}/ext/pdo_sqlite"
+  cp -R "${php_source_dir}/ext/pdo_sqlite/." "${SWOOLE_CLI_DIR}/ext/pdo_sqlite"
+}
+
 apply_profile_patches() {
-  local enabled_file swoole_file curl_file libzip_file zlib_file redis_file oniguruma_file ext
+  local enabled_file pdo_sqlite_file swoole_file curl_file libzip_file zlib_file redis_file oniguruma_file ext
 
   # Swoole CLI 上游默认启用 full profile；这里将默认启用列表改为 profile 明确声明的最小集合，
-  # 防止 prepare.php 在解析依赖时下载 sqlite/intl/imagick/mongodb 等未使用组件。
+  # 防止 prepare.php 在解析依赖时下载 intl/imagick/mongodb 等未使用组件。
   if [[ -n "${PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS:-}" ]]; then
     enabled_file="${SWOOLE_CLI_DIR}/sapi/src/builder/enabled_extensions.php"
     {
@@ -275,6 +299,28 @@ apply_profile_patches() {
     echo "Applied enabled extension profile: ${PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS}" >&2
   fi
 
+  # Swoole CLI v6.2.0.0 内置 sqlite3 builder，但没有单独的 pdo_sqlite builder。
+  # slim profile 需要 PHP 标准 PDO SQLite 能力；这里仅启用 ext/pdo_sqlite，不启用 Swoole 的
+  # --enable-swoole-sqlite hook，避免额外协程 hook 行为和构建面扩大。
+  pdo_sqlite_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/pdo_sqlite.php"
+  cat > "${pdo_sqlite_file}" <<'PHP'
+<?php
+
+use SwooleCli\Extension;
+use SwooleCli\Preprocessor;
+
+return function (Preprocessor $p) {
+    $p->addExtension(
+        (new Extension('pdo_sqlite'))
+            ->withHomePage('https://www.php.net/pdo_sqlite')
+            ->withOptions('--with-pdo-sqlite')
+            ->withDependentLibraries('sqlite3')
+            ->withDependentExtensions('pdo')
+    );
+};
+PHP
+  echo "Applied PDO SQLite extension builder" >&2
+
   if [[ "${PHPSFX_SWOOLE_SLIM_EXTENSION:-0}" == "1" ]]; then
     swoole_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/swoole.php"
     cat > "${swoole_file}" <<'PHP'
@@ -286,7 +332,8 @@ use SwooleCli\Preprocessor;
 return function (Preprocessor $p) {
     // HyperfAdmin slim profile:
     // 保留 Swoole HTTP/TCP/WebSocket server、coroutine、mysqlnd、curl hook 和 c-ares DNS 能力；
-    // 不启用 pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
+    // SQLite 仅启用 PHP 标准 sqlite3/pdo_sqlite，不启用 Swoole 的 sqlite 协程 hook。
+    // 不启用 pgsql/odbc/ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
     $dependentLibraries = ['curl', 'openssl', 'cares', 'zlib'];
     $dependentExtensions = ['curl', 'openssl', 'sockets', 'mysqlnd', 'pdo'];
 
@@ -561,6 +608,7 @@ else
 fi
 assert_target_php_version
 prime_swoole_extension_archive
+prime_pdo_sqlite_extension_source
 apply_profile_patches
 mkdir -p "${GLOBAL_PREFIX}"
 

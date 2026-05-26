@@ -59,6 +59,57 @@ if (!extension_loaded("swoole") || !defined("SWOOLE_VERSION")) {
     $errors[] = "swoole extension is not available";
 }
 
+$sqliteSmoke = [
+    "sqlite3_class" => class_exists("SQLite3"),
+    "sqlite3_memory" => null,
+    "pdo_sqlite_driver" => class_exists("PDO") ? in_array("sqlite", PDO::getAvailableDrivers(), true) : false,
+    "pdo_sqlite_memory" => null,
+];
+
+if (in_array("sqlite3", $required, true)) {
+    if (!class_exists("SQLite3")) {
+        $errors[] = "SQLite3 class is not available";
+    } else {
+        try {
+            $db = new SQLite3(":memory:");
+            $db->exec("CREATE TABLE phpsfx_sqlite3_check (id INTEGER PRIMARY KEY, name TEXT NOT NULL)");
+            $db->exec("INSERT INTO phpsfx_sqlite3_check (name) VALUES (\"ok\")");
+            $value = $db->querySingle("SELECT name FROM phpsfx_sqlite3_check WHERE id = 1");
+            $db->close();
+            $sqliteSmoke["sqlite3_memory"] = ($value === "ok");
+            if ($value !== "ok") {
+                $errors[] = "SQLite3 memory smoke check returned unexpected value";
+            }
+        } catch (Throwable $e) {
+            $sqliteSmoke["sqlite3_memory"] = false;
+            $errors[] = "SQLite3 memory smoke check failed: " . $e->getMessage();
+        }
+    }
+}
+
+if (in_array("pdo_sqlite", $required, true)) {
+    if (!class_exists("PDO")) {
+        $errors[] = "PDO class is not available";
+    } elseif (!in_array("sqlite", PDO::getAvailableDrivers(), true)) {
+        $errors[] = "PDO sqlite driver is not available";
+    } else {
+        try {
+            $pdo = new PDO("sqlite::memory:");
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $pdo->exec("CREATE TABLE phpsfx_pdo_sqlite_check (id INTEGER PRIMARY KEY, name TEXT NOT NULL)");
+            $pdo->exec("INSERT INTO phpsfx_pdo_sqlite_check (name) VALUES (\"ok\")");
+            $value = $pdo->query("SELECT name FROM phpsfx_pdo_sqlite_check WHERE id = 1")->fetchColumn();
+            $sqliteSmoke["pdo_sqlite_memory"] = ($value === "ok");
+            if ($value !== "ok") {
+                $errors[] = "PDO SQLite memory smoke check returned unexpected value";
+            }
+        } catch (Throwable $e) {
+            $sqliteSmoke["pdo_sqlite_memory"] = false;
+            $errors[] = "PDO SQLite memory smoke check failed: " . $e->getMessage();
+        }
+    }
+}
+
 $result = [
     "php_version" => PHP_VERSION,
     "php_sapi" => PHP_SAPI,
@@ -67,6 +118,7 @@ $result = [
     "required_extensions" => $required,
     "forbidden_extensions" => $forbidden,
     "allow_extra_extensions" => $allowExtra,
+    "sqlite_smoke" => $sqliteSmoke,
     "errors" => $errors,
 ];
 

@@ -45,9 +45,9 @@ if [[ "${SWOOLE_SRC_REF}" =~ ^[0-9]+(\.[0-9]+)+([._-].*)?$ ]]; then
 fi
 DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist"}
 PROFILE_NAME=${PHPSFX_PROFILE_NAME:-hyperfadmin-slim}
-EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,bz2,gd,opcache,sodium,sockets}
-FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,sqlite3,xlswriter,xsl,yaml}
-DEFAULT_EXTENSIONS='bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,openssl,pcntl,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
+EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,pdo_sqlite,sqlite3,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,bz2,gd,opcache,sodium,sockets}
+FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,xlswriter,xsl,yaml}
+DEFAULT_EXTENSIONS='bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,openssl,pcntl,pdo_mysql,pdo_sqlite,phar,posix,redis,simplexml,sockets,sodium,sqlite3,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
 
 case "${PLATFORM}" in
   linux-x64|linux-a64|macos-x64|macos-a64) ;;

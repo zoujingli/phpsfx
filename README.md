@@ -36,22 +36,22 @@ swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 
 ```text
 bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,
-openssl,pcntl,pdo_mysql,phar,posix,redis,simplexml,sockets,sodium,
-swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib
+openssl,pcntl,pdo_mysql,pdo_sqlite,phar,posix,redis,simplexml,sockets,
+sodium,sqlite3,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib
 ```
 
 默认裁剪未使用或体积较大的扩展：
 
 ```text
 exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,
-sqlite3,xlswriter,xsl,yaml
+xlswriter,xsl,yaml
 ```
 
-说明：Swoole CLI 的 `+xml` 构建项会同时启用 `dom/simplexml/xmlreader/xmlwriter`；`json/hash/pcre/reflection/PDO/libxml` 等属于 PHP core 或依赖扩展带出的基础能力，不作为独立 `prepare.php +xxx` 参数传入。`intl` 默认不打包，`bz2/gd/opcache` 作为 dmskc 标准能力保留。
+说明：Swoole CLI 的 `+xml` 构建项会同时启用 `dom/simplexml/xmlreader/xmlwriter`；`json/hash/pcre/reflection/PDO/libxml` 等属于 PHP core 或依赖扩展带出的基础能力，不作为独立 `prepare.php +xxx` 参数传入。`intl` 默认不打包，`bz2/gd/opcache` 作为 dmskc 标准能力保留。`sqlite3/pdo_sqlite` 作为 PHP 标准 SQLite 能力保留，预计每个平台运行时增加约 1.6–3 MiB，最终以构建产物字节差值为准。
 
 构建脚本还会把 Swoole CLI 上游默认的 full profile 收敛为 `PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS`，并进一步裁剪底层依赖：
 
-- Swoole 扩展：保留 server/coroutine/curl hook/mysqlnd/c-ares DNS，默认不启用 `pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd` 等未使用功能。
+- Swoole 扩展：保留 server/coroutine/curl hook/mysqlnd/c-ares DNS，默认不启用 `pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd` 等未使用功能；其中 MySQL 协程化底层条件继续依赖 `mysqlnd`，SQLite 只提供 PHP 标准 `sqlite3/pdo_sqlite`，不默认启用 `--enable-swoole-sqlite`。
 - libcurl：保留 HTTP(S)、OpenSSL、zlib、c-ares，默认不启用 HTTP3、SSH2、IDN、PSL、Brotli、Zstd。
 - libzip：保留 Zip + zlib + OpenSSL，默认不启用 LZMA、Zstd。
 - zlib：移除上游模板中与 zlib 构建无关的额外依赖。
@@ -100,7 +100,7 @@ PHPSFX_SWOOLE_SRC_REF=v6.2.1 \
 
 构建完成后输出到 `dist/`。
 
-如果本地已经安装了同版本 Swoole CLI（例如 `/usr/local/bin/php` 输出 `Swoole 6.2.1`），可以先导入为 phpsfx 标准命名产物，用于快速验证下游打包链路。注意官方 full runtime 通常包含 `mongodb/sqlite3/imagick` 等额外扩展，导入时如只是本地调试可显式允许额外扩展；正式发布仍应使用源码构建的 slim 产物：
+如果本地已经安装了同版本 Swoole CLI（例如 `/usr/local/bin/php` 输出 `Swoole 6.2.1`），可以先导入为 phpsfx 标准命名产物，用于快速验证下游打包链路。注意官方 full runtime 通常包含 `mongodb/imagick/mysqli/intl` 等额外扩展，导入时如只是本地调试可显式允许额外扩展；正式发布仍应使用源码构建的 slim 产物：
 
 ```bash
 PHPSFX_ALLOW_EXTRA_EXTENSIONS=1 \
@@ -117,7 +117,7 @@ PHPSFX_DOWNLOAD_MIRROR_URL=https://example.com \
   bash scripts/build-swoole-cli.sh linux-x64
 
 # 临时调整扩展裁剪。
-PHPSFX_SWOOLE_CLI_PREPARE_FLAGS='+redis +swoole +pdo_mysql +xml -mongodb -sqlite3' \
+PHPSFX_SWOOLE_CLI_PREPARE_FLAGS='+redis +swoole +pdo_mysql +pdo_sqlite +sqlite3 +xml -mongodb' \
   bash scripts/build-swoole-cli.sh linux-x64
 ```
 
@@ -130,15 +130,16 @@ PHPSFX_SWOOLE_CLI_PREPARE_FLAGS='+redis +swoole +pdo_mysql +xml -mongodb -sqlite
 - `PHP_VERSION` 以目标版本前缀开头。
 - `PHP_SAPI === "cli"`。
 - `SWOOLE_CLI` 常量存在。
-- `swoole`、`redis`、`pdo_mysql`、`openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter`、`bz2`、`gd`、`opcache` 等必需扩展已加载。
-- `exif/gettext/gmp/imagick/intl/mongodb/mysqli/readline/session/soap/sqlite3/xlswriter/xsl/yaml` 等未使用扩展未被打包。
+- `swoole`、`redis`、`pdo_mysql`、`pdo_sqlite`、`sqlite3`、`openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter`、`bz2`、`gd`、`opcache` 等必需扩展已加载。
+- `SQLite3` 类、`SQLite3(":memory:")`、`PDO("sqlite::memory:")` 和 `PDO::getAvailableDrivers()` 中的 `sqlite` 驱动可用。
+- `exif/gettext/gmp/imagick/intl/mongodb/mysqli/readline/session/soap/xlswriter/xsl/yaml` 等未使用扩展未被打包。
 
 手动校验已有产物：
 
 ```bash
 PHPSFX_EXPECTED_PHP_PREFIX=8.4. \
-PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,bz2,gd,opcache \
-PHPSFX_FORBIDDEN_EXTENSIONS=exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,sqlite3,xlswriter,xsl,yaml \
+PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,pdo_sqlite,sqlite3,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,bz2,gd,opcache \
+PHPSFX_FORBIDDEN_EXTENSIONS=exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,xlswriter,xsl,yaml \
   bash scripts/validate-swoole-cli.sh dist/swoole-cli-php8.4-linux-x64
 ```
 
