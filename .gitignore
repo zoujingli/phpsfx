@@ -4,6 +4,8 @@
 /.build/
 /downloads/
 /log/
+/tests/hyperf-smoke/runtime/
+/tests/hyperf-smoke/vendor/
 
 # OS / editor
 .DS_Store

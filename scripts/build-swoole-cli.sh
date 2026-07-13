@@ -18,7 +18,11 @@ PLATFORM=${1:-${PHPSFX_PLATFORM:-}}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
 SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
-SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.1}
+SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.2}
+EXPECTED_SWOOLE_VERSION=${PHPSFX_EXPECTED_SWOOLE_VERSION:-}
+if [[ -z "${EXPECTED_SWOOLE_VERSION}" && "${SWOOLE_SRC_REF}" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+  EXPECTED_SWOOLE_VERSION=${BASH_REMATCH[1]}
+fi
 SWOOLE_CLI_DIR=${PHPSFX_SWOOLE_CLI_DIR:-"${ROOT_DIR}/.build/swoole-cli"}
 DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist"}
 HOST_JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
@@ -47,7 +51,8 @@ Important environment variables:
   PHPSFX_PHP_VERSION                 PHP version prefix used for asset name and validation, default: 8.4
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
   PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.2.0.0
-  PHPSFX_SWOOLE_SRC_REF              swoole-src tag, branch, or commit, default: v6.2.1
+  PHPSFX_SWOOLE_SRC_REF              swoole-src tag, branch, or commit, default: v6.2.2
+  PHPSFX_EXPECTED_SWOOLE_VERSION     Exact runtime Swoole version; inferred from numeric source tags
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
   PHPSFX_REQUIRED_EXTENSIONS         Comma-separated runtime extensions checked after build
   PHPSFX_FORBIDDEN_EXTENSIONS        Comma-separated extensions that must not be loaded
@@ -638,10 +643,13 @@ cp "${SWOOLE_CLI_BIN}" "${DIST_DIR}/${ASSET_NAME}"
 chmod +x "${DIST_DIR}/${ASSET_NAME}"
 
 PHPSFX_EXPECTED_PHP_PREFIX="${PHP_VERSION}." \
+PHPSFX_EXPECTED_SWOOLE_VERSION="${EXPECTED_SWOOLE_VERSION}" \
 PHPSFX_REQUIRED_EXTENSIONS="${EXPECTED_EXTENSIONS}" \
 PHPSFX_FORBIDDEN_EXTENSIONS="${FORBIDDEN_EXTENSIONS}" \
   bash "${ROOT_DIR}/scripts/validate-swoole-cli.sh" "${DIST_DIR}/${ASSET_NAME}"
 
+PHP_FULL_VERSION=$("${DIST_DIR}/${ASSET_NAME}" -r 'echo PHP_VERSION;')
+SWOOLE_VERSION=$("${DIST_DIR}/${ASSET_NAME}" -r 'echo defined("SWOOLE_VERSION") ? SWOOLE_VERSION : "";')
 SHA256=$(sha256_file "${DIST_DIR}/${ASSET_NAME}")
 BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
@@ -650,6 +658,8 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
   "asset": "${ASSET_NAME}",
   "profile": "${PROFILE_NAME}",
   "php_version": "${PHP_VERSION}",
+  "php_full_version": "${PHP_FULL_VERSION}",
+  "swoole_version": "${SWOOLE_VERSION}",
   "extensions": "${PHPSFX_EXTENSIONS:-${DEFAULT_EXTENSIONS}}",
   "required_extensions": "${EXPECTED_EXTENSIONS}",
   "forbidden_extensions": "${FORBIDDEN_EXTENSIONS}",

@@ -1,0 +1,22 @@
+{
+  "name": "phpsfx/hyperf-smoke",
+  "description": "Minimal Hyperf 3.2 runtime smoke fixture for phpsfx",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.4",
+    "hyperf/command": "~3.2.0",
+    "hyperf/config": "~3.2.0",
+    "hyperf/di": "~3.2.0",
+    "hyperf/engine": "~2.15.0",
+    "hyperf/event": "~3.2.0",
+    "hyperf/framework": "~3.2.0",
+    "hyperf/http-server": "~3.2.0",
+    "hyperf/server": "~3.2.0"
+  },
+  "config": {
+    "allow-plugins": {},
+    "optimize-autoloader": true,
+    "sort-packages": true
+  }
+}

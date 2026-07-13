@@ -12,7 +12,8 @@ tests against the recommended upstream release when the runtime is already insta
 
 Environment:
   PHPSFX_SWOOLE_CLI_REF     Swoole CLI ref recorded in metadata, default: v6.2.0.0
-  PHPSFX_SWOOLE_SRC_REF     swoole-src ref recorded in metadata, default: v6.2.1
+  PHPSFX_SWOOLE_SRC_REF     swoole-src ref recorded in metadata, default: v6.2.2
+  PHPSFX_EXPECTED_SWOOLE_VERSION Exact runtime Swoole version; inferred from numeric source tags
 USAGE
   exit 2
 fi
@@ -39,9 +40,13 @@ fi
 
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
 SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
-SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.1}
+SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.2}
 if [[ "${SWOOLE_SRC_REF}" =~ ^[0-9]+(\.[0-9]+)+([._-].*)?$ ]]; then
   SWOOLE_SRC_REF="v${SWOOLE_SRC_REF}"
+fi
+EXPECTED_SWOOLE_VERSION=${PHPSFX_EXPECTED_SWOOLE_VERSION:-}
+if [[ -z "${EXPECTED_SWOOLE_VERSION}" && "${SWOOLE_SRC_REF}" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+  EXPECTED_SWOOLE_VERSION=${BASH_REMATCH[1]}
 fi
 DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist"}
 PROFILE_NAME=${PHPSFX_PROFILE_NAME:-hyperfadmin-slim}
@@ -71,6 +76,7 @@ cp "${SOURCE_BIN}" "${DIST_DIR}/${ASSET_NAME}"
 chmod +x "${DIST_DIR}/${ASSET_NAME}"
 
 PHPSFX_EXPECTED_PHP_PREFIX="${PHP_VERSION}." \
+PHPSFX_EXPECTED_SWOOLE_VERSION="${EXPECTED_SWOOLE_VERSION}" \
 PHPSFX_REQUIRED_EXTENSIONS="${EXPECTED_EXTENSIONS}" \
 PHPSFX_FORBIDDEN_EXTENSIONS="${FORBIDDEN_EXTENSIONS}" \
   bash "${ROOT_DIR}/scripts/validate-swoole-cli.sh" "${DIST_DIR}/${ASSET_NAME}"

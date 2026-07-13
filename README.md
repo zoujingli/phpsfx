@@ -67,7 +67,7 @@ GitHub Actions workflow：`.github/workflows/release.yml`。
 触发方式：
 
 - 推送 `v*` 标签：自动构建所有平台并创建 GitHub Release。
-- 手动运行 `Release swoole-cli`：可输入 `version`、`php_version`、`swoole_cli_ref`、`prepare_flags`。
+- 手动运行 `Release swoole-cli`：可输入 `version`、`php_version`、`swoole_cli_ref`、`swoole_src_ref`、`prepare_flags`。
 
 示例：
 
@@ -83,7 +83,7 @@ https://github.com/swoole/swoole-cli.git
 https://github.com/swoole/swoole-src.git
 ```
 
-默认 `swoole_cli_ref=v6.2.0.0`，构建脚本会覆盖使用 `swoole-src v6.2.1`。如果未来要固定官方 tag 或提交，可设置环境变量 `PHPSFX_SWOOLE_CLI_REF` / `PHPSFX_SWOOLE_SRC_REF`。
+默认 `swoole_cli_ref=v6.2.0.0`，构建脚本会覆盖使用 `swoole-src v6.2.2`。如果未来要固定官方 tag 或提交，可设置环境变量 `PHPSFX_SWOOLE_CLI_REF` / `PHPSFX_SWOOLE_SRC_REF`；非数字 ref 可通过 `PHPSFX_EXPECTED_SWOOLE_VERSION` 指定产物必须报告的扩展版本。
 
 ## 本地 / WSL 调试
 
@@ -94,18 +94,18 @@ cd /mnt/d/WebRoot/phpsfx
 PHPSFX_PLATFORM=linux-x64 \
 PHPSFX_PHP_VERSION=8.4 \
 PHPSFX_SWOOLE_CLI_REF=v6.2.0.0 \
-PHPSFX_SWOOLE_SRC_REF=v6.2.1 \
+PHPSFX_SWOOLE_SRC_REF=v6.2.2 \
   bash scripts/build-swoole-cli.sh
 ```
 
 构建完成后输出到 `dist/`。
 
-如果本地已经安装了同版本 Swoole CLI（例如 `/usr/local/bin/php` 输出 `Swoole 6.2.1`），可以先导入为 phpsfx 标准命名产物，用于快速验证下游打包链路。注意官方 full runtime 通常包含 `mongodb/imagick/mysqli/intl` 等额外扩展，导入时如只是本地调试可显式允许额外扩展；正式发布仍应使用源码构建的 slim 产物：
+如果本地已经安装了同版本 Swoole CLI（例如 `/usr/local/bin/php` 输出 `Swoole 6.2.2`），可以先导入为 phpsfx 标准命名产物，用于快速验证下游打包链路。注意官方 full runtime 通常包含 `mongodb/imagick/mysqli/intl` 等额外扩展，导入时如只是本地调试可显式允许额外扩展；正式发布仍应使用源码构建的 slim 产物：
 
 ```bash
 PHPSFX_ALLOW_EXTRA_EXTENSIONS=1 \
 PHPSFX_SWOOLE_CLI_REF=v6.2.0.0 \
-PHPSFX_SWOOLE_SRC_REF=v6.2.1 \
+PHPSFX_SWOOLE_SRC_REF=v6.2.2 \
   bash scripts/import-swoole-cli.sh linux-x64 /usr/local/bin/php
 ```
 
@@ -130,14 +130,24 @@ PHPSFX_SWOOLE_CLI_PREPARE_FLAGS='+redis +swoole +pdo_mysql +pdo_sqlite +sqlite3 
 - `PHP_VERSION` 以目标版本前缀开头。
 - `PHP_SAPI === "cli"`。
 - `SWOOLE_CLI` 常量存在。
+- 数字版本的 `PHPSFX_SWOOLE_SRC_REF` 与运行时 `SWOOLE_VERSION` 完全一致。
 - `swoole`、`redis`、`pdo_mysql`、`pdo_sqlite`、`sqlite3`、`openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter`、`bz2`、`gd`、`opcache` 等必需扩展已加载。
 - `SQLite3` 类、`SQLite3(":memory:")`、`PDO("sqlite::memory:")` 和 `PDO::getAvailableDrivers()` 中的 `sqlite` 驱动可用。
 - `exif/gettext/gmp/imagick/intl/mongodb/mysqli/readline/session/soap/xlswriter/xsl/yaml` 等未使用扩展未被打包。
+
+发布矩阵还会使用 `tests/hyperf-smoke` 中固定版本的 Hyperf 3.2 最小应用启动 HTTP 服务，验证请求协程、Swoole 版本和 PDO SQLite 查询：
+
+```bash
+composer install --working-dir=tests/hyperf-smoke --no-dev
+PHPSFX_EXPECTED_SWOOLE_VERSION=6.2.2 \
+  bash scripts/test-hyperf-smoke.sh dist/swoole-cli-php8.4-linux-x64
+```
 
 手动校验已有产物：
 
 ```bash
 PHPSFX_EXPECTED_PHP_PREFIX=8.4. \
+PHPSFX_EXPECTED_SWOOLE_VERSION=6.2.2 \
 PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,pdo_sqlite,sqlite3,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,bz2,gd,opcache \
 PHPSFX_FORBIDDEN_EXTENSIONS=exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,xlswriter,xsl,yaml \
   bash scripts/validate-swoole-cli.sh dist/swoole-cli-php8.4-linux-x64

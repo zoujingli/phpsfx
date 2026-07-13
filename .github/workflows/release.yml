@@ -21,6 +21,11 @@ on:
         required: true
         default: 'v6.2.0.0'
         type: string
+      swoole_src_ref:
+        description: 'swoole-src branch, tag, or commit'
+        required: true
+        default: 'v6.2.2'
+        type: string
       prepare_flags:
         description: 'Optional prepare.php flags. Leave empty to use repository defaults.'
         required: false
@@ -60,6 +65,7 @@ jobs:
       PHPSFX_PLATFORM: ${{ matrix.platform }}
       PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.4' }}
       PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.0.0' }}
+      PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.2' }}
       PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/${{ matrix.platform }}
       PHPSFX_BUILD_JOBS: 2
 
@@ -97,8 +103,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build/swoole-cli/pool
-          key: phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-${{ hashFiles('scripts/profiles/hyperfadmin-slim.env') }}
+          key: phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-${{ env.PHPSFX_SWOOLE_SRC_REF }}-${{ hashFiles('scripts/profiles/hyperfadmin-slim.env') }}
           restore-keys: |
+            phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-${{ env.PHPSFX_SWOOLE_SRC_REF }}-
             phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-
             phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-
 
@@ -110,6 +117,11 @@ jobs:
           composer --version
           git --version
           make --version | head -1
+
+      - name: Install Hyperf smoke dependencies
+        run: |
+          composer validate --working-dir=tests/hyperf-smoke --strict
+          composer install --working-dir=tests/hyperf-smoke --no-dev --no-interaction --no-progress --prefer-dist --optimize-autoloader
 
       - name: Build and validate swoole-cli
         env:
@@ -143,6 +155,10 @@ jobs:
         run: |
           bash scripts/test-packaging.sh "dist/${PHPSFX_PLATFORM}/swoole-cli-php${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}"
 
+      - name: Test Hyperf 3.2 runtime
+        run: |
+          bash scripts/test-hyperf-smoke.sh "dist/${PHPSFX_PLATFORM}/swoole-cli-php${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}"
+
       - name: Upload failure log
         if: failure()
         uses: actions/upload-artifact@v4
@@ -172,6 +188,7 @@ jobs:
       PHPSFX_RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
       PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.4' }}
       PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.0.0' }}
+      PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.2' }}
       PHPSFX_SWOOLE_CLI_PREPARE_FLAGS: ${{ github.event.inputs.prepare_flags }}
     steps:
       - name: Checkout phpsfx
@@ -214,7 +231,7 @@ jobs:
           draft: false
           prerelease: false
           body: |
-            Swoole CLI PHP ${{ env.PHPSFX_PHP_VERSION }} slim runtime.
+            Swoole CLI PHP ${{ env.PHPSFX_PHP_VERSION }} slim runtime with Swoole ${{ env.PHPSFX_SWOOLE_SRC_REF }}.
 
             This release uses the slim profile and Swoole CLI SFX format:
 

@@ -16,6 +16,7 @@ fi
 chmod +x "${SWOOLE_CLI}"
 "${SWOOLE_CLI}" -r '
 $expectedPrefix = getenv("PHPSFX_EXPECTED_PHP_PREFIX") ?: "8.4.";
+$expectedSwooleVersion = ltrim(trim(getenv("PHPSFX_EXPECTED_SWOOLE_VERSION") ?: ""), "vV");
 $required = array_values(array_filter(array_map("trim", explode(",", getenv("PHPSFX_REQUIRED_EXTENSIONS") ?: ""))));
 $forbidden = array_values(array_filter(array_map("trim", explode(",", getenv("PHPSFX_FORBIDDEN_EXTENSIONS") ?: ""))));
 $allowExtra = filter_var(getenv("PHPSFX_ALLOW_EXTRA_EXTENSIONS") ?: "0", FILTER_VALIDATE_BOOL);
@@ -57,6 +58,8 @@ if ($unexpected !== []) {
 
 if (!extension_loaded("swoole") || !defined("SWOOLE_VERSION")) {
     $errors[] = "swoole extension is not available";
+} elseif ($expectedSwooleVersion !== "" && SWOOLE_VERSION !== $expectedSwooleVersion) {
+    $errors[] = sprintf("SWOOLE_VERSION %s does not match %s", SWOOLE_VERSION, $expectedSwooleVersion);
 }
 
 $sqliteSmoke = [
@@ -115,6 +118,7 @@ $result = [
     "php_sapi" => PHP_SAPI,
     "swoole_cli" => defined("SWOOLE_CLI"),
     "swoole_version" => defined("SWOOLE_VERSION") ? SWOOLE_VERSION : null,
+    "expected_swoole_version" => $expectedSwooleVersion !== "" ? $expectedSwooleVersion : null,
     "required_extensions" => $required,
     "forbidden_extensions" => $forbidden,
     "allow_extra_extensions" => $allowExtra,

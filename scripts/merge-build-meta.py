@@ -35,6 +35,7 @@ def main() -> int:
     profiles = sorted({str(item.get("profile", "")) for item in platforms if item.get("profile", "")})
     swoole_cli_refs = sorted({str(item.get("swoole_cli_ref", "")) for item in platforms if item.get("swoole_cli_ref", "")})
     swoole_src_refs = sorted({str(item.get("swoole_src_ref", "")) for item in platforms if item.get("swoole_src_ref", "")})
+    swoole_versions = sorted({str(item.get("swoole_version", "")) for item in platforms if item.get("swoole_version", "")})
     profile_components = {
         profile: next(
             (
@@ -55,6 +56,7 @@ def main() -> int:
         "php_versions": php_versions,
         "swoole_cli_refs": swoole_cli_refs,
         "swoole_src_refs": swoole_src_refs,
+        "swoole_versions": swoole_versions,
         "extensions": env_or_default("PHPSFX_EXTENSIONS", first.get("extensions", "")) if len(profiles) <= 1 else "",
         "required_extensions": env_or_default("PHPSFX_REQUIRED_EXTENSIONS", first.get("required_extensions", "")) if len(profiles) <= 1 else "",
         "forbidden_extensions": env_or_default("PHPSFX_FORBIDDEN_EXTENSIONS", first.get("forbidden_extensions", "")) if len(profiles) <= 1 else "",
