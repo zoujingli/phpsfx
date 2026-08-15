@@ -39,6 +39,9 @@ PREPARE_FLAGS=${PHPSFX_SWOOLE_CLI_PREPARE_FLAGS:-${DEFAULT_PREPARE_FLAGS}}
 EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,pdo_sqlite,sqlite3,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,bz2,gd,opcache,sodium,sockets}
 FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,xlswriter,xsl,yaml}
 DOWNLOAD_MIRROR_URL=${PHPSFX_DOWNLOAD_MIRROR_URL:-}
+ASSET_SUFFIX=${PHPSFX_ASSET_SUFFIX:-}
+SWOOLE_ODBC_ENABLED=${PHPSFX_SWOOLE_ODBC:-0}
+SWOOLE_ODBC_PREFIX=${PHPSFX_SWOOLE_ODBC_PREFIX:-/usr}
 
 usage() {
   cat <<'USAGE'
@@ -65,6 +68,9 @@ Important environment variables:
   PHPSFX_ZLIB_SLIM_LIBRARY           Set to 1 to remove unrelated zlib library deps, default from profile: 1
   PHPSFX_REDIS_DISABLE_SESSION       Set to 1 to build redis without session hooks, default from profile: 1
   PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
+  PHPSFX_ASSET_SUFFIX                Optional release asset suffix, for example dm-odbc
+  PHPSFX_SWOOLE_ODBC                 Set to 1 to enable Swoole coroutine PDO ODBC support
+  PHPSFX_SWOOLE_ODBC_PREFIX          unixODBC include/library prefix, default: /usr
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
   PHPSFX_DOWNLOAD_MIRROR_URL         Optional Swoole CLI dependency mirror URL passed to prepare.php
   PHPSFX_DIST_DIR                    Output directory, default: ./dist
@@ -109,6 +115,38 @@ retry_command() {
     sleep $((attempt * 3))
     attempt=$((attempt + 1))
   done
+}
+
+enable_dynamic_odbc_linking() {
+  local generated_make="${SWOOLE_CLI_DIR}/make.sh"
+
+  php -r '
+$path = $argv[1];
+$contents = file_get_contents($path);
+if ($contents === false) {
+    fwrite(STDERR, "Unable to read generated make.sh\n");
+    exit(1);
+}
+$replacements = [
+    "    sed -i.backup \x27s/-export-dynamic/-all-static/g\x27 Makefile\n" =>
+        "    # Keep the ODBC runtime dynamically linked to the system driver manager.\n",
+    "    export LDFLAGS=\"\$LDFLAGS  -static -all-static\"\n" =>
+        "    export LDFLAGS=\"\$LDFLAGS\"\n",
+];
+foreach ($replacements as $search => $replacement) {
+    $count = substr_count($contents, $search);
+    if ($count !== 1) {
+        fwrite(STDERR, sprintf("Expected one generated static-link directive, found %d\n", $count));
+        exit(1);
+    }
+    $contents = str_replace($search, $replacement, $contents);
+}
+if (file_put_contents($path, $contents) === false) {
+    fwrite(STDERR, "Unable to update generated make.sh\n");
+    exit(1);
+}
+' "${generated_make}"
+  echo "Configured dynamic Linux linking for system unixODBC" >&2
 }
 
 sha256_file() {
@@ -338,7 +376,8 @@ return function (Preprocessor $p) {
     // HyperfAdmin slim profile:
     // 保留 Swoole HTTP/TCP/WebSocket server、coroutine、mysqlnd、curl hook 和 c-ares DNS 能力；
     // SQLite 仅启用 PHP 标准 sqlite3/pdo_sqlite，不启用 Swoole 的 sqlite 协程 hook。
-    // 不启用 pgsql/odbc/ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
+    // 默认不启用 pgsql/odbc/ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
+    // 达梦专用 profile 通过系统 unixODBC 动态启用 Swoole 的协程 PDO ODBC 驱动。
     $dependentLibraries = ['curl', 'openssl', 'cares', 'zlib'];
     $dependentExtensions = ['curl', 'openssl', 'sockets', 'mysqlnd', 'pdo'];
 
@@ -349,6 +388,11 @@ return function (Preprocessor $p) {
         '--enable-swoole-curl',
         '--enable-cares',
     ];
+
+    if (getenv('PHPSFX_SWOOLE_ODBC') === '1') {
+        $odbcPrefix = getenv('PHPSFX_SWOOLE_ODBC_PREFIX') ?: '/usr';
+        $options[] = '--with-swoole-odbc=unixODBC,' . $odbcPrefix;
+    }
 
     $p->addExtension((new Extension('swoole'))
         ->withHomePage('https://github.com/swoole/swoole-src')
@@ -597,6 +641,32 @@ case "${PLATFORM}" in
     exit 2
     ;;
 esac
+
+case "${SWOOLE_ODBC_ENABLED}" in
+  0|1) ;;
+  *) echo "PHPSFX_SWOOLE_ODBC must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ -n "${ASSET_SUFFIX}" && ! "${ASSET_SUFFIX}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+  echo "PHPSFX_ASSET_SUFFIX must contain only lowercase letters, digits, and hyphens" >&2
+  exit 2
+fi
+if [[ "${SWOOLE_ODBC_ENABLED}" == "1" ]]; then
+  case "${PLATFORM}" in
+    linux-x64|linux-a64) ;;
+    *)
+      echo "Swoole ODBC profile supports Linux x86_64 and ARM64 only, got ${PLATFORM}" >&2
+      exit 2
+      ;;
+  esac
+  if [[ "${SWOOLE_ODBC_PREFIX}" != /* || "${SWOOLE_ODBC_PREFIX}" =~ [[:space:],] ]]; then
+    echo "PHPSFX_SWOOLE_ODBC_PREFIX must be an absolute path without whitespace or commas" >&2
+    exit 2
+  fi
+  if [[ ! -f "${SWOOLE_ODBC_PREFIX}/include/sql.h" || ! -f "${SWOOLE_ODBC_PREFIX}/include/sqlext.h" ]]; then
+    echo "unixODBC development headers were not found under ${SWOOLE_ODBC_PREFIX}/include" >&2
+    exit 1
+  fi
+fi
 GLOBAL_PREFIX=${PHPSFX_GLOBAL_PREFIX:-"${SWOOLE_CLI_DIR}/.global-prefix/${PLATFORM}"}
 
 require_command git
@@ -604,6 +674,12 @@ require_command php
 require_command composer
 require_command make
 require_command tar
+if [[ "${PLATFORM}" == linux-* ]]; then
+  require_command readelf
+fi
+
+export PHPSFX_SWOOLE_ODBC="${SWOOLE_ODBC_ENABLED}"
+export PHPSFX_SWOOLE_ODBC_PREFIX="${SWOOLE_ODBC_PREFIX}"
 
 checkout_swoole_cli
 if [[ -d .git ]]; then
@@ -627,6 +703,9 @@ if [[ -n "${DOWNLOAD_MIRROR_URL}" ]]; then
   PREPARE_ARGS+=("--with-download-mirror-url=${DOWNLOAD_MIRROR_URL}")
 fi
 php prepare.php --without-docker=1 --with-parallel-jobs="${JOBS}" --with-global-prefix="${GLOBAL_PREFIX}" "${PREPARE_ARGS[@]}"
+if [[ "${SWOOLE_ODBC_ENABLED}" == "1" ]]; then
+  enable_dynamic_odbc_linking
+fi
 
 bash ./make.sh all-library
 bash ./make.sh config
@@ -638,23 +717,49 @@ if [[ ! -s "${SWOOLE_CLI_BIN}" ]]; then
   exit 1
 fi
 
-ASSET_NAME="swoole-cli-php${PHP_VERSION}-${PLATFORM}"
+ASSET_SUFFIX_PART=
+if [[ -n "${ASSET_SUFFIX}" ]]; then
+  ASSET_SUFFIX_PART="-${ASSET_SUFFIX}"
+fi
+ASSET_NAME="swoole-cli-php${PHP_VERSION}-${PLATFORM}${ASSET_SUFFIX_PART}"
 cp "${SWOOLE_CLI_BIN}" "${DIST_DIR}/${ASSET_NAME}"
 chmod +x "${DIST_DIR}/${ASSET_NAME}"
+
+ODBC_DYNAMIC_DEPENDENCY=
+if [[ "${PLATFORM}" == linux-* ]]; then
+  ODBC_DYNAMIC_DEPENDENCY=$(readelf -d "${DIST_DIR}/${ASSET_NAME}" \
+    | sed -n 's/.*Shared library: \[\(libodbc\.so[^]]*\)\].*/\1/p')
+  ODBC_DYNAMIC_DEPENDENCY=${ODBC_DYNAMIC_DEPENDENCY%%$'\n'*}
+  if [[ "${SWOOLE_ODBC_ENABLED}" == "1" && "${ODBC_DYNAMIC_DEPENDENCY}" != "libodbc.so.2" ]]; then
+    echo "ODBC runtime must dynamically depend on libodbc.so.2; static or incompatible unixODBC linkage is not allowed" >&2
+    exit 1
+  fi
+  if [[ "${SWOOLE_ODBC_ENABLED}" == "0" && -n "${ODBC_DYNAMIC_DEPENDENCY}" ]]; then
+    echo "Default runtime unexpectedly depends on ${ODBC_DYNAMIC_DEPENDENCY}" >&2
+    exit 1
+  fi
+fi
 
 PHPSFX_EXPECTED_PHP_PREFIX="${PHP_VERSION}." \
 PHPSFX_EXPECTED_SWOOLE_VERSION="${EXPECTED_SWOOLE_VERSION}" \
 PHPSFX_REQUIRED_EXTENSIONS="${EXPECTED_EXTENSIONS}" \
 PHPSFX_FORBIDDEN_EXTENSIONS="${FORBIDDEN_EXTENSIONS}" \
+PHPSFX_EXPECT_SWOOLE_ODBC="${SWOOLE_ODBC_ENABLED}" \
   bash "${ROOT_DIR}/scripts/validate-swoole-cli.sh" "${DIST_DIR}/${ASSET_NAME}"
 
 PHP_FULL_VERSION=$("${DIST_DIR}/${ASSET_NAME}" -r 'echo PHP_VERSION;')
 SWOOLE_VERSION=$("${DIST_DIR}/${ASSET_NAME}" -r 'echo defined("SWOOLE_VERSION") ? SWOOLE_VERSION : "";')
 SHA256=$(sha256_file "${DIST_DIR}/${ASSET_NAME}")
 BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
+if [[ "${SWOOLE_ODBC_ENABLED}" == "1" ]]; then
+  SWOOLE_ODBC_JSON=true
+else
+  SWOOLE_ODBC_JSON=false
+fi
+cat > "${DIST_DIR}/build-meta-${PLATFORM}${ASSET_SUFFIX_PART}.json" <<META
 {
   "platform": "${PLATFORM}",
+  "variant": "${PLATFORM}${ASSET_SUFFIX_PART}",
   "asset": "${ASSET_NAME}",
   "profile": "${PROFILE_NAME}",
   "php_version": "${PHP_VERSION}",
@@ -670,6 +775,9 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
   "zlib_slim_library": "${PHPSFX_ZLIB_SLIM_LIBRARY:-0}",
   "redis_disable_session": "${PHPSFX_REDIS_DISABLE_SESSION:-0}",
   "oniguruma_clang_compat": "${PHPSFX_ONIGURUMA_CLANG_COMPAT:-0}",
+  "swoole_odbc": ${SWOOLE_ODBC_JSON},
+  "swoole_odbc_prefix": "${SWOOLE_ODBC_PREFIX}",
+  "odbc_dynamic_dependency": "${ODBC_DYNAMIC_DEPENDENCY}",
   "swoole_cli_repo": "${SWOOLE_CLI_REPO}",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
   "swoole_src_ref": "${SWOOLE_SRC_REF}",

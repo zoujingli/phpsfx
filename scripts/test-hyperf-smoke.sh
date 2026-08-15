@@ -31,6 +31,17 @@ fi
 
 LOG_FILE=$(mktemp "${TMPDIR:-/tmp}/phpsfx-hyperf-smoke-log.XXXXXX")
 RESPONSE_FILE=$(mktemp "${TMPDIR:-/tmp}/phpsfx-hyperf-smoke-response.XXXXXX")
+ODBC_DB_FILE=
+ODBC_SMOKE_DSN=${PHPSFX_ODBC_SMOKE_DSN:-}
+if [[ -z "${ODBC_SMOKE_DSN}" && -n "${PHPSFX_ODBC_SMOKE_DRIVER:-}" ]]; then
+  ODBC_DB_FILE=$(mktemp "${TMPDIR:-/tmp}/phpsfx-hyperf-odbc.XXXXXX.sqlite")
+  ODBC_SMOKE_DSN="odbc:Driver=${PHPSFX_ODBC_SMOKE_DRIVER};Database=${ODBC_DB_FILE}"
+fi
+if [[ -n "${ODBC_SMOKE_DSN}" ]]; then
+  EXPECT_ODBC_SMOKE=1
+else
+  EXPECT_ODBC_SMOKE=0
+fi
 SERVER_PID=
 
 cleanup() {
@@ -39,11 +50,17 @@ cleanup() {
     wait "${SERVER_PID}" 2>/dev/null || true
   fi
   rm -f "${LOG_FILE}" "${RESPONSE_FILE}"
+  if [[ -n "${ODBC_DB_FILE}" ]]; then
+    rm -f "${ODBC_DB_FILE}"
+  fi
 }
 trap cleanup EXIT INT TERM
 
 mkdir -p "${FIXTURE_DIR}/runtime"
 PHPSFX_HYPERF_SMOKE_PORT="${PORT}" \
+PHPSFX_ODBC_SMOKE_DSN="${ODBC_SMOKE_DSN}" \
+PHPSFX_ODBC_SMOKE_USER="${PHPSFX_ODBC_SMOKE_USER:-}" \
+PHPSFX_ODBC_SMOKE_PASSWORD="${PHPSFX_ODBC_SMOKE_PASSWORD:-}" \
   "${SWOOLE_CLI}" "${FIXTURE_DIR}/bin/hyperf.php" start >"${LOG_FILE}" 2>&1 &
 SERVER_PID=$!
 
@@ -67,9 +84,11 @@ if [[ ! -s "${RESPONSE_FILE}" ]]; then
 fi
 
 PHPSFX_EXPECTED_SWOOLE_VERSION="${EXPECTED_SWOOLE_VERSION}" \
+PHPSFX_EXPECT_ODBC_SMOKE="${EXPECT_ODBC_SMOKE}" \
   "${SWOOLE_CLI}" -r '
 $response = json_decode(file_get_contents($argv[1]), true, flags: JSON_THROW_ON_ERROR);
 $expectedVersion = ltrim(trim(getenv("PHPSFX_EXPECTED_SWOOLE_VERSION") ?: ""), "vV");
+$expectOdbc = (getenv("PHPSFX_EXPECT_ODBC_SMOKE") ?: "0") === "1";
 $errors = [];
 if (($response["status"] ?? null) !== "ok") {
     $errors[] = "health status is not ok";
@@ -82,6 +101,28 @@ if (($response["coroutine_id"] ?? -1) <= 0) {
 }
 if (($response["pdo_sqlite"] ?? null) !== "ok") {
     $errors[] = "PDO SQLite smoke query failed";
+}
+if ($expectOdbc) {
+    $odbc = $response["pdo_odbc"] ?? null;
+    if (!is_array($odbc)) {
+        $errors[] = "PDO ODBC smoke result is missing";
+    } else {
+        if (($odbc["driver"] ?? null) !== "odbc") {
+            $errors[] = "PDO ODBC driver name is invalid";
+        }
+        if (($odbc["value"] ?? null) !== "达梦-ODBC") {
+            $errors[] = "PDO ODBC Unicode query failed";
+        }
+        if (($odbc["rollback_count"] ?? null) !== 1) {
+            $errors[] = "PDO ODBC rollback check failed";
+        }
+        if (($odbc["commit_count"] ?? null) !== 2) {
+            $errors[] = "PDO ODBC commit check failed";
+        }
+        if (($odbc["concurrent_values"] ?? null) !== ["达梦-ODBC", "达梦-ODBC"]) {
+            $errors[] = "PDO ODBC concurrent query check failed";
+        }
+    }
 }
 echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
 if ($errors !== []) {
