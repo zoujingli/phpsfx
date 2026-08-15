@@ -20,6 +20,7 @@ $expectedSwooleVersion = ltrim(trim(getenv("PHPSFX_EXPECTED_SWOOLE_VERSION") ?: 
 $required = array_values(array_filter(array_map("trim", explode(",", getenv("PHPSFX_REQUIRED_EXTENSIONS") ?: ""))));
 $forbidden = array_values(array_filter(array_map("trim", explode(",", getenv("PHPSFX_FORBIDDEN_EXTENSIONS") ?: ""))));
 $allowExtra = filter_var(getenv("PHPSFX_ALLOW_EXTRA_EXTENSIONS") ?: "0", FILTER_VALIDATE_BOOL);
+$expectSwooleOdbc = (getenv("PHPSFX_EXPECT_SWOOLE_ODBC") ?: "0") === "1";
 $errors = [];
 
 if (!str_starts_with(PHP_VERSION, $expectedPrefix)) {
@@ -60,6 +61,28 @@ if (!extension_loaded("swoole") || !defined("SWOOLE_VERSION")) {
     $errors[] = "swoole extension is not available";
 } elseif ($expectedSwooleVersion !== "" && SWOOLE_VERSION !== $expectedSwooleVersion) {
     $errors[] = sprintf("SWOOLE_VERSION %s does not match %s", SWOOLE_VERSION, $expectedSwooleVersion);
+}
+
+ob_start();
+phpinfo(INFO_MODULES);
+$moduleInfo = (string) ob_get_clean();
+$pdoDrivers = class_exists("PDO") ? PDO::getAvailableDrivers() : [];
+$odbcHook = defined("SWOOLE_HOOK_PDO_ODBC") ? constant("SWOOLE_HOOK_PDO_ODBC") : 0;
+$allHooks = defined("SWOOLE_HOOK_ALL") ? constant("SWOOLE_HOOK_ALL") : 0;
+$odbcSmoke = [
+    "expected" => $expectSwooleOdbc,
+    "pdo_driver" => in_array("odbc", $pdoDrivers, true),
+    "hook_constant" => $odbcHook !== 0,
+    "hook_in_all" => $odbcHook !== 0 && ($allHooks & $odbcHook) === $odbcHook,
+    "coroutine_feature" => preg_match("/coroutine_odbc\\s*=>\\s*enabled/", $moduleInfo) === 1,
+];
+
+if ($expectSwooleOdbc) {
+    foreach (["pdo_driver", "hook_constant", "hook_in_all", "coroutine_feature"] as $capability) {
+        if (!$odbcSmoke[$capability]) {
+            $errors[] = sprintf("Swoole ODBC capability is missing: %s", $capability);
+        }
+    }
 }
 
 $sqliteSmoke = [
@@ -122,6 +145,7 @@ $result = [
     "required_extensions" => $required,
     "forbidden_extensions" => $forbidden,
     "allow_extra_extensions" => $allowExtra,
+    "odbc" => $odbcSmoke,
     "sqlite_smoke" => $sqliteSmoke,
     "errors" => $errors,
 ];

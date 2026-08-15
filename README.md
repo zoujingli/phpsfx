@@ -2,6 +2,8 @@
 
 `phpsfx` 用于自动构建和发布多平台 **Swoole CLI PHP 8.4 静态运行时**。产物用于把 PHP 源码入口或可执行 Phar 追加进运行时后生成单文件可执行程序。
 
+默认产物继续静态内置其扩展和第三方库；达梦 ODBC 专用产物是例外，它会动态依赖部署机的 unixODBC 和达梦官方 ODBC 客户端。
+
 运行时使用 Swoole CLI 官方 SFX 格式：
 
 ```text
@@ -22,11 +24,15 @@ swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 | Linux ARM64 | `swoole-cli-php8.4-linux-a64` |
 | macOS x86_64 | `swoole-cli-php8.4-macos-x64` |
 | macOS ARM64 | `swoole-cli-php8.4-macos-a64` |
+| Linux x86_64 + 达梦 ODBC | `swoole-cli-php8.4-linux-x64-dm-odbc` |
+| Linux ARM64 + 达梦 ODBC | `swoole-cli-php8.4-linux-a64-dm-odbc` |
 
 同时发布：
 
 - `SHA256SUMS`
 - `build-meta.json`
+- `build-meta-linux-x64-dm-odbc.json`
+- `build-meta-linux-a64-dm-odbc.json`
 
 首版不发布 Windows 产物。
 
@@ -123,6 +129,60 @@ PHPSFX_SWOOLE_CLI_PREPARE_FLAGS='+redis +swoole +pdo_mysql +pdo_sqlite +sqlite3 
 
 > Linux/macOS 构建均依赖本机编译工具链。CI 会安装基础依赖；本地请参考 Swoole CLI 官方 Linux/macOS 构建文档准备环境。
 
+## 达梦 ODBC 专用运行时
+
+达梦专用产物使用 Swoole 6.2.2 自带的 PHP 8.4 协程 PDO ODBC 驱动。它只提供运行时连接能力，不包含达梦客户端、配置、账号、密码或达梦 Go 驱动源码，也不代表业务 SQL、迁移和 MySQL 方言已经兼容达梦。
+
+完整的环境准备、架构与 glibc 要求、官方客户端安装、unixODBC 配置、systemd 环境、预检、真实验收和故障处理见 [达梦 ODBC 专用运行时环境与使用](docs/dameng-odbc-runtime.md)。
+
+当前为 Linux x86_64、Linux ARM64 提供构建产物和验收脚本。构建机需要 unixODBC 开发头文件，运行机需要 `libodbc.so.2` 和与系统架构匹配的达梦官方 ODBC 客户端。为了在运行时加载系统 unixODBC，专用产物不是全静态 ELF，部署机还需满足对应 Release 构建基线的 Linux 动态运行时 ABI：
+
+```bash
+# 在已有本项目 Linux 构建工具链的主机上增加 ODBC 构建依赖。
+# 达梦客户端仍需按官方文档在部署机另行安装。
+sudo apt-get install -y unixodbc unixodbc-dev binutils
+
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-dm-odbc.env \
+  bash scripts/build-swoole-cli.sh linux-x64
+
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-dm-odbc.env \
+  bash scripts/build-swoole-cli.sh linux-a64
+```
+
+两个命令都必须在对应架构的 Linux 主机原生执行，不能用 x86_64 主机构建 ARM64 产物。源码构建输出、Release 下载校验和生产部署依赖以完整环境手册为准。
+
+构建脚本会拒绝将 unixODBC 静态链接进专用产物，并校验以下能力：
+
+- `PDO::getAvailableDrivers()` 包含 `odbc`。
+- `SWOOLE_HOOK_PDO_ODBC` 已定义并包含在 `SWOOLE_HOOK_ALL` 中。
+- `php --ri swoole` 报告 `coroutine_odbc => enabled`。
+- ELF 动态依赖中存在 `libodbc.so.2`，默认 Linux 产物则不得存在任何 `libodbc.so*` 依赖。
+
+部署时按达梦官方 ODBC 文档配置驱动和命名 DSN，`odbc.ini` 中不要保存账号或密码。实测达梦官方 Linux ODBC 驱动时，PDO 的 DSN 应使用 `odbc:<unixODBC DSN 名>`（例如 `odbc:dm-prod`），账号和密码继续通过 `PDO` 的独立参数传入。应用只从环境或密钥管理系统读取连接信息。最小连接示例：
+
+```php
+<?php
+
+$pdo = new PDO(
+    getenv('DM_ODBC_DSN'),
+    getenv('DM_ODBC_USER') ?: '',
+    getenv('DM_ODBC_PASSWORD') ?: '',
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+);
+```
+
+现场只读验收需要预先设置 `PHPSFX_DM_ODBC_DSN`、`PHPSFX_DM_ODBC_USER` 和 `PHPSFX_DM_ODBC_PASSWORD`，其中 DSN 使用上述 `odbc:<名称>` 格式。脚本不会输出这些值，并会通过达梦专属 `ID_CODE()` 查询确认连接目标是达梦数据库：
+
+```bash
+bash scripts/test-dameng-odbc.sh \
+  dist/swoole-cli-php8.4-linux-x64-dm-odbc
+
+bash scripts/test-dameng-odbc.sh \
+  dist/swoole-cli-php8.4-linux-a64-dm-odbc
+```
+
+在隔离的验收账号和测试 schema 中设置 `PHPSFX_DM_ODBC_ALLOW_WRITE=1`，可进一步验证参数绑定、中文、数值、时间、事务、错误传播和并发连接。脚本创建唯一测试表并在 `finally` 中精确删除；不要对未授权的生产账号启用写入验收。
+
 ## 运行时校验
 
 构建脚本会直接执行生成的 `swoole-cli`，并校验：
@@ -133,6 +193,7 @@ PHPSFX_SWOOLE_CLI_PREPARE_FLAGS='+redis +swoole +pdo_mysql +pdo_sqlite +sqlite3 
 - 数字版本的 `PHPSFX_SWOOLE_SRC_REF` 与运行时 `SWOOLE_VERSION` 完全一致。
 - `swoole`、`redis`、`pdo_mysql`、`pdo_sqlite`、`sqlite3`、`openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter`、`bz2`、`gd`、`opcache` 等必需扩展已加载。
 - `SQLite3` 类、`SQLite3(":memory:")`、`PDO("sqlite::memory:")` 和 `PDO::getAvailableDrivers()` 中的 `sqlite` 驱动可用。
+- 达梦专用产物额外校验 PDO ODBC 驱动、Swoole ODBC 协程 hook 和动态 unixODBC 依赖。
 - `exif/gettext/gmp/imagick/intl/mongodb/mysqli/readline/session/soap/xlswriter/xsl/yaml` 等未使用扩展未被打包。
 
 发布矩阵还会使用 `tests/hyperf-smoke` 中固定版本的 Hyperf 3.2 最小应用启动 HTTP 服务，验证请求协程、Swoole 版本和 PDO SQLite 查询：
@@ -163,6 +224,13 @@ bash scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
 
 ```bash
 bash scripts/download-release-asset.sh linux-x64 v0.1.0 /tmp/swoole-cli
+```
+
+下载达梦 ODBC 专用产物：
+
+```bash
+bash scripts/download-release-asset.sh linux-x64-dm-odbc latest /tmp/swoole-cli-dm
+bash scripts/download-release-asset.sh linux-a64-dm-odbc latest /tmp/swoole-cli-dm-arm64
 ```
 
 ## PHP 源码打包
