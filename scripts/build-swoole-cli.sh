@@ -68,7 +68,7 @@ Important environment variables:
   PHPSFX_ZLIB_SLIM_LIBRARY           Set to 1 to remove unrelated zlib library deps, default from profile: 1
   PHPSFX_REDIS_DISABLE_SESSION       Set to 1 to build redis without session hooks, default from profile: 1
   PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
-  PHPSFX_ASSET_SUFFIX                Optional release asset suffix, for example dm-odbc
+  PHPSFX_ASSET_SUFFIX                Optional compatibility asset suffix, for example dm-odbc
   PHPSFX_SWOOLE_ODBC                 Set to 1 to enable Swoole coroutine PDO ODBC support
   PHPSFX_SWOOLE_ODBC_PREFIX          unixODBC include/library prefix, default: /usr
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
@@ -376,8 +376,8 @@ return function (Preprocessor $p) {
     // HyperfAdmin slim profile:
     // 保留 Swoole HTTP/TCP/WebSocket server、coroutine、mysqlnd、curl hook 和 c-ares DNS 能力；
     // SQLite 仅启用 PHP 标准 sqlite3/pdo_sqlite，不启用 Swoole 的 sqlite 协程 hook。
-    // 默认不启用 pgsql/odbc/ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
-    // 达梦专用 profile 通过系统 unixODBC 动态启用 Swoole 的协程 PDO ODBC 驱动。
+    // 默认不启用 pgsql/ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
+    // Linux ODBC profile 通过系统 unixODBC 动态启用 Swoole 的协程 PDO ODBC 驱动。
     $dependentLibraries = ['curl', 'openssl', 'cares', 'zlib'];
     $dependentExtensions = ['curl', 'openssl', 'sockets', 'mysqlnd', 'pdo'];
 
@@ -735,7 +735,7 @@ if [[ "${PLATFORM}" == linux-* ]]; then
     exit 1
   fi
   if [[ "${SWOOLE_ODBC_ENABLED}" == "0" && -n "${ODBC_DYNAMIC_DEPENDENCY}" ]]; then
-    echo "Default runtime unexpectedly depends on ${ODBC_DYNAMIC_DEPENDENCY}" >&2
+    echo "ODBC-disabled runtime unexpectedly depends on ${ODBC_DYNAMIC_DEPENDENCY}" >&2
     exit 1
   fi
 fi

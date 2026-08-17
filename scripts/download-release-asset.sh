@@ -8,8 +8,8 @@ Usage: scripts/download-release-asset.sh <platform> [version] [output-file]
 
 Examples:
   scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
-  scripts/download-release-asset.sh linux-x64-dm-odbc latest /tmp/swoole-cli-dm
-  scripts/download-release-asset.sh linux-a64-dm-odbc latest /tmp/swoole-cli-dm-arm64
+  scripts/download-release-asset.sh linux-a64 latest /tmp/swoole-cli-arm64
+  scripts/download-release-asset.sh linux-x64-dm-odbc latest /tmp/swoole-cli-dm  # compatibility alias
   scripts/download-release-asset.sh macos-a64 v0.1.0 ./swoole-cli
 
 Environment:

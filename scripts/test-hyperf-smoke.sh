@@ -110,7 +110,7 @@ if ($expectOdbc) {
         if (($odbc["driver"] ?? null) !== "odbc") {
             $errors[] = "PDO ODBC driver name is invalid";
         }
-        if (($odbc["value"] ?? null) !== "达梦-ODBC") {
+        if (($odbc["value"] ?? null) !== "标准-ODBC") {
             $errors[] = "PDO ODBC Unicode query failed";
         }
         if (($odbc["rollback_count"] ?? null) !== 1) {
@@ -119,7 +119,7 @@ if ($expectOdbc) {
         if (($odbc["commit_count"] ?? null) !== 2) {
             $errors[] = "PDO ODBC commit check failed";
         }
-        if (($odbc["concurrent_values"] ?? null) !== ["达梦-ODBC", "达梦-ODBC"]) {
+        if (($odbc["concurrent_values"] ?? null) !== ["标准-ODBC", "标准-ODBC"]) {
             $errors[] = "PDO ODBC concurrent query check failed";
         }
     }

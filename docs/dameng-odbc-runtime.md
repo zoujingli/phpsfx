@@ -1,17 +1,19 @@
-# 达梦 ODBC 专用运行时环境与使用
+# 达梦 ODBC 环境与真实验收
 
-本文说明 `phpsfx` 达梦 ODBC 专用运行时的构建、部署、配置、连接和验收方法。适用于：
+本文说明如何使用 `phpsfx` Linux 标准 ODBC 运行时连接和验收达梦数据库。适用于：
 
-- `swoole-cli-php8.4-linux-x64-dm-odbc`
-- `swoole-cli-php8.4-linux-a64-dm-odbc`
+- `swoole-cli-php8.4-linux-x64`
+- `swoole-cli-php8.4-linux-a64`
 
-专用运行时只提供 PHP PDO ODBC 和 Swoole 协程 ODBC 能力。它不包含达梦客户端、许可证、数据库配置、DSN、账号或密码，也不证明智慧厨房业务 SQL、分页、迁移和 MySQL 方言已经兼容达梦。
+`linux-x64-dm-odbc` 和 `linux-a64-dm-odbc` 是为兼容 `v0.0.34` 部署脚本暂时保留的同内容下载别名，新部署应使用上面的标准文件名。
+
+运行时只提供 PHP PDO ODBC 和 Swoole 协程 ODBC 能力。它不包含达梦客户端、许可证、数据库配置、DSN、账号或密码，也不证明智慧厨房业务 SQL、分页、迁移和 MySQL 方言已经兼容达梦。unixODBC 基础环境和其它厂商配置见 [Linux ODBC 环境与常见数据库配置](odbc-runtime.md)。
 
 首次部署按以下顺序执行：
 
 1. 确认部署机架构和 glibc 版本。
 2. 安装 unixODBC 运行库和预检工具。
-3. 从 Release 下载对应专用产物，或在同架构 Linux 主机源码构建。
+3. 从 Release 下载对应 Linux 标准产物，或在同架构 Linux 主机源码构建。
 4. 单独安装同架构的达梦官方客户端。
 5. 注册达梦 ODBC 驱动和命名 DSN，并向服务进程注入环境变量。
 6. 完成运行时预检，再执行真实达梦只读和写入验收。
@@ -20,11 +22,11 @@
 
 | 环境 | 必需内容 | 用途 |
 |------|----------|------|
-| 构建机 | Linux、编译工具链、`unixODBC` 开发包 | 从源码生成专用运行时 |
-| 部署机 | 专用运行时、`libodbc.so.2`、同架构达梦官方客户端、ODBC 配置 | 运行应用 |
+| 构建机 | Linux、编译工具链、`unixODBC` 开发包 | 从源码生成标准 ODBC 运行时 |
+| 部署机 | Linux 标准运行时、`libodbc.so.2`、同架构达梦官方客户端、ODBC 配置 | 运行应用 |
 | 验收环境 | 部署机全部内容、可访问的达梦实例、隔离验收账号 | 执行真实连接测试 |
 
-默认四个平台产物不需要 unixODBC。只有名称以 `-dm-odbc` 结尾的 Linux 专用产物具备达梦 ODBC 能力和外部动态库依赖。
+Linux x86_64、ARM64 标准产物需要 unixODBC；macOS x86_64、ARM64 产物当前不包含 ODBC。
 
 ## 2. 选择正确架构
 
@@ -36,19 +38,19 @@ uname -m
 
 | `uname -m` 结果 | 运行时 | 达梦客户端要求 |
 |-----------------|--------|----------------|
-| `x86_64` | `linux-x64-dm-odbc` | Linux x86_64 官方客户端 |
-| `aarch64` 或 `arm64` | `linux-a64-dm-odbc` | Linux ARM64 官方客户端 |
+| `x86_64` | `linux-x64` | Linux x86_64 官方客户端 |
+| `aarch64` 或 `arm64` | `linux-a64` | Linux ARM64 官方客户端 |
 
-运行时、unixODBC 和 `libdodbc.so` 必须是同一架构。macOS 默认产物仍可使用，但当前没有 macOS 达梦 ODBC 专用产物。
+运行时、unixODBC 和 `libdodbc.so` 必须是同一架构。macOS 产物仍可用于不依赖 ODBC 的应用，但当前不承诺达梦 ODBC 能力。
 
-当前 GitHub Actions Linux 构建基线是 Ubuntu 24.04。专用产物为了动态加载 unixODBC，不是全静态 ELF，因此还会依赖构建基线的 glibc、libstdc++ 和 libgcc ABI。达梦客户端安装包标注“麒麟 10”不代表本项目的 Ubuntu 24.04 产物一定能在麒麟 10 上运行。
+当前 GitHub Actions Linux 构建基线是 Ubuntu 24.04。Linux 标准产物为了动态加载 unixODBC，不是全静态 ELF，因此还会依赖构建基线的 glibc、libstdc++ 和 libgcc ABI。达梦客户端安装包标注“麒麟 10”不代表本项目的 Ubuntu 24.04 产物一定能在麒麟 10 上运行。
 
 部署前必须执行：
 
 ```bash
 getconf GNU_LIBC_VERSION
-file ./swoole-cli-php8.4-linux-a64-dm-odbc
-ldd ./swoole-cli-php8.4-linux-a64-dm-odbc
+file ./swoole-cli-php8.4-linux-a64
+ldd ./swoole-cli-php8.4-linux-a64
 ```
 
 如果出现 `GLIBC_x.y not found`，应在与目标系统 ABI 兼容的构建环境重新源码构建，不要通过替换系统 glibc 处理。
@@ -97,7 +99,7 @@ ldconfig -p | grep 'libodbc\.so\.2'
 odbcinst -j
 ```
 
-## 4. 从源码构建专用运行时
+## 4. 从源码构建标准 ODBC 运行时
 
 源码构建必须在与目标产物相同架构的 Linux 主机上原生执行；当前脚本不提供 x86_64 与 ARM64 之间的交叉编译。先在仓库根目录确认环境：
 
@@ -106,7 +108,7 @@ uname -m
 php -v
 composer --version
 command -v git make tar readelf
-test -f scripts/profiles/hyperfadmin-dm-odbc.env
+test -f scripts/profiles/hyperfadmin-odbc.env
 ```
 
 系统 PHP 必须是 8.4，unixODBC 头文件默认必须位于 `/usr/include/sql.h` 和 `/usr/include/sqlext.h`。如果开发包安装在其它前缀，可通过 `PHPSFX_SWOOLE_ODBC_PREFIX` 指定绝对路径。
@@ -114,25 +116,25 @@ test -f scripts/profiles/hyperfadmin-dm-odbc.env
 x86_64 构建机执行：
 
 ```bash
-PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-dm-odbc.env \
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
   bash scripts/build-swoole-cli.sh linux-x64
 ```
 
 ARM64 构建机执行：
 
 ```bash
-PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-dm-odbc.env \
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
   bash scripts/build-swoole-cli.sh linux-a64
 ```
 
 成功后输出分别为：
 
 ```text
-dist/swoole-cli-php8.4-linux-x64-dm-odbc
-dist/build-meta-linux-x64-dm-odbc.json
+dist/swoole-cli-php8.4-linux-x64
+dist/build-meta-linux-x64.json
 
-dist/swoole-cli-php8.4-linux-a64-dm-odbc
-dist/build-meta-linux-a64-dm-odbc.json
+dist/swoole-cli-php8.4-linux-a64
+dist/build-meta-linux-a64.json
 ```
 
 构建脚本会执行运行时能力校验，并要求元数据中的 `swoole_odbc` 为 `true`、`odbc_dynamic_dependency` 为 `libodbc.so.2`。构建过程中使用 `.build/swoole-cli` 工作目录；可用 `PHPSFX_DIST_DIR` 修改输出目录，但不要在 x86_64 和 ARM64 之间复用构建工作目录。
@@ -167,11 +169,11 @@ LD_LIBRARY_PATH="$DM_HOME/bin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 
 下载脚本的第三个参数是最终输出文件名。为了能直接使用 Release 的 `SHA256SUMS`，必须先保留 Release 原文件名完成校验，再安装为服务使用的短文件名。
 
-以下示例用于 ARM64；x86_64 只需把前两行的平台和文件名改为 `linux-x64-dm-odbc` 和 `swoole-cli-php8.4-linux-x64-dm-odbc`：
+以下示例用于 ARM64；x86_64 只需把前两行的平台和文件名改为 `linux-x64` 和 `swoole-cli-php8.4-linux-x64`：
 
 ```bash
-PHPSFX_RELEASE_PLATFORM=linux-a64-dm-odbc
-PHPSFX_RELEASE_ASSET=swoole-cli-php8.4-linux-a64-dm-odbc
+PHPSFX_RELEASE_PLATFORM=linux-a64
+PHPSFX_RELEASE_ASSET=swoole-cli-php8.4-linux-a64
 PHPSFX_RELEASE_STAGE=$(mktemp -d)
 
 bash scripts/download-release-asset.sh \
@@ -193,7 +195,7 @@ curl -fL --retry 3 \
 sudo install -d -m 0755 /opt/phpsfx
 sudo install -m 0755 \
   "$PHPSFX_RELEASE_STAGE/$PHPSFX_RELEASE_ASSET" \
-  /opt/phpsfx/swoole-cli-dm
+  /opt/phpsfx/swoole-cli
 ```
 
 校验必须输出 `<Release 原文件名>: OK` 后才能安装。固定版本部署时，把下载脚本的 `latest` 改为标签（例如 `v0.1.0`），同时把 `SHA256SUMS` URL 改为 `/releases/download/v0.1.0/SHA256SUMS`，两者必须来自同一 Release。
@@ -277,10 +279,10 @@ ExecStart=/opt/app/app --self
 
 ## 9. 部署前预检
 
-假设运行时位于 `/opt/phpsfx/swoole-cli-dm`：
+假设运行时位于 `/opt/phpsfx/swoole-cli`：
 
 ```bash
-RUNTIME=/opt/phpsfx/swoole-cli-dm
+RUNTIME=/opt/phpsfx/swoole-cli
 
 test -x "$RUNTIME"
 file "$RUNTIME"
@@ -340,7 +342,7 @@ DSN 必须是 `odbc:<odbc.ini 节名>`，例如 `odbc:dm-prod`，不要把密码
 
 ## 11. 真实达梦验收
 
-公共 CI 使用 SQLite ODBC 驱动验证 PDO、事务和 Hyperf 协程链路，只能证明专用运行时的 ODBC 能力。下面的脚本连接实际达梦实例后，才能形成该架构、该版达梦客户端和该数据库环境的真实验收证据；结果不能自动外推到另一种 CPU 架构或其它客户环境。
+公共 CI 使用 SQLite ODBC 驱动验证 PDO、事务和 Hyperf 协程链路，只能证明 Linux 标准运行时的 ODBC 能力。下面的脚本连接实际达梦实例后，才能形成该架构、该版达梦客户端和该数据库环境的真实验收证据；结果不能自动外推到另一种 CPU 架构或其它客户环境。
 
 验收脚本使用以下专用变量，与业务应用的 `DM_ODBC_*` 变量分开：
 
@@ -358,7 +360,7 @@ export PHPSFX_DM_ODBC_DSN="$DM_ODBC_DSN"
 export PHPSFX_DM_ODBC_USER="$DM_ODBC_USER"
 export PHPSFX_DM_ODBC_PASSWORD="$DM_ODBC_PASSWORD"
 
-bash scripts/test-dameng-odbc.sh /opt/phpsfx/swoole-cli-dm
+bash scripts/test-dameng-odbc.sh /opt/phpsfx/swoole-cli
 ```
 
 默认只读验收检查：
@@ -372,7 +374,7 @@ bash scripts/test-dameng-odbc.sh /opt/phpsfx/swoole-cli-dm
 
 ```bash
 export PHPSFX_DM_ODBC_ALLOW_WRITE=1
-bash scripts/test-dameng-odbc.sh /opt/phpsfx/swoole-cli-dm
+bash scripts/test-dameng-odbc.sh /opt/phpsfx/swoole-cli
 ```
 
 写入验收还会检查中文字符串、`DECIMAL`、`TIMESTAMP`、参数绑定、事务提交、事务回滚、SQL 错误传播和两个协程并发连接。脚本创建唯一测试表，并在 `finally` 中按表名精确删除。
@@ -389,7 +391,7 @@ bash scripts/test-dameng-odbc.sh /opt/phpsfx/swoole-cli-dm
 | `GLIBC_x.y not found` | 目标系统 ABI 低于 Release 构建基线；在兼容环境重建运行时 |
 | `Data source name not found` | DSN 名不一致，或服务用户读取了另一套 `odbc.ini`；先运行 `odbcinst -j` |
 | 连接超时或拒绝 | 数据库监听、端口、防火墙、容器网络或安全组问题 |
-| `SWOOLE_HOOK_PDO_ODBC` 未定义 | 下载了默认产物而不是 `-dm-odbc` 专用产物 |
+| `SWOOLE_HOOK_PDO_ODBC` 未定义 | 下载了 macOS 或旧版 ODBC-disabled 产物；检查平台和 Release 版本 |
 | 中文不一致 | 核对数据库字符集、客户端字符集和字段类型；以真实中文验收结果为准 |
 | 写入验收权限错误 | 使用隔离验收账号/schema，或改用默认只读验收，不要扩大生产账号权限 |
 

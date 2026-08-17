@@ -54,17 +54,17 @@ jobs:
           - platform: linux-x64
             variant: linux-x64
             runner: ubuntu-latest
-            profile: scripts/profiles/hyperfadmin-slim.env
+            profile: scripts/profiles/hyperfadmin-odbc.env
             asset_suffix: ''
             asset_tail: linux-x64
-            odbc: false
+            odbc: true
           - platform: linux-a64
             variant: linux-a64
             runner: ubuntu-24.04-arm
-            profile: scripts/profiles/hyperfadmin-slim.env
+            profile: scripts/profiles/hyperfadmin-odbc.env
             asset_suffix: ''
             asset_tail: linux-a64
-            odbc: false
+            odbc: true
           - platform: macos-x64
             variant: macos-x64
             runner: macos-15-intel
@@ -79,21 +79,6 @@ jobs:
             asset_suffix: ''
             asset_tail: macos-a64
             odbc: false
-          - platform: linux-x64
-            variant: linux-x64-dm-odbc
-            runner: ubuntu-latest
-            profile: scripts/profiles/hyperfadmin-dm-odbc.env
-            asset_suffix: dm-odbc
-            asset_tail: linux-x64-dm-odbc
-            odbc: true
-          - platform: linux-a64
-            variant: linux-a64-dm-odbc
-            runner: ubuntu-24.04-arm
-            profile: scripts/profiles/hyperfadmin-dm-odbc.env
-            asset_suffix: dm-odbc
-            asset_tail: linux-a64-dm-odbc
-            odbc: true
-
     env:
       PHPSFX_PLATFORM: ${{ matrix.platform }}
       PHPSFX_PROFILE_FILE: ${{ matrix.profile }}
@@ -254,18 +239,35 @@ jobs:
           find dist -maxdepth 1 -type f -print | sort
           python3 scripts/merge-build-meta.py dist dist/build-meta.json
           cd dist
+          # Keep the v0.0.34 Dameng-specific names as temporary download aliases.
+          for linux_platform in linux-x64 linux-a64; do
+            cp -p \
+              "swoole-cli-php${PHPSFX_PHP_VERSION}-${linux_platform}" \
+              "swoole-cli-php${PHPSFX_PHP_VERSION}-${linux_platform}-dm-odbc"
+          done
           sha256sum swoole-cli-php"${PHPSFX_PHP_VERSION}"-* > SHA256SUMS
           cat SHA256SUMS
           test -s build-meta.json
-          for dm_platform in linux-x64 linux-a64; do
-            dm_asset="swoole-cli-php${PHPSFX_PHP_VERSION}-${dm_platform}-dm-odbc"
-            dm_meta="build-meta-${dm_platform}-dm-odbc.json"
-            test -s "${dm_asset}"
-            test -s "${dm_meta}"
-            grep -F "  ${dm_asset}" SHA256SUMS
-            jq -e '.swoole_odbc == true and .odbc_dynamic_dependency == "libodbc.so.2"' "${dm_meta}"
-            jq -e --arg asset "${dm_asset}" \
+          jq -e '.platforms | length == 4' build-meta.json
+          for linux_platform in linux-x64 linux-a64; do
+            linux_asset="swoole-cli-php${PHPSFX_PHP_VERSION}-${linux_platform}"
+            linux_alias="${linux_asset}-dm-odbc"
+            linux_meta="build-meta-${linux_platform}.json"
+            test -s "${linux_asset}"
+            test -s "${linux_alias}"
+            test -s "${linux_meta}"
+            cmp "${linux_asset}" "${linux_alias}"
+            grep -F "  ${linux_asset}" SHA256SUMS
+            grep -F "  ${linux_alias}" SHA256SUMS
+            jq -e \
+              '.profile == "hyperfadmin-odbc" and .swoole_odbc == true and .odbc_dynamic_dependency == "libodbc.so.2"' \
+              "${linux_meta}"
+            jq -e --arg asset "${linux_asset}" \
               '.platforms | any(.asset == $asset and .swoole_odbc == true)' build-meta.json
+          done
+          for macos_platform in macos-x64 macos-a64; do
+            jq -e '.profile == "slim" and .swoole_odbc == false and .odbc_dynamic_dependency == ""' \
+              "build-meta-${macos_platform}.json"
           done
 
       - name: Upload combined workflow artifact
@@ -276,7 +278,7 @@ jobs:
           if-no-files-found: error
           path: |
             dist/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-*
-            dist/build-meta-linux-*-dm-odbc.json
+            dist/build-meta-*.json
             dist/SHA256SUMS
             dist/build-meta.json
 
@@ -297,11 +299,14 @@ jobs:
 
             Run packed applications with `--self`, for example `./app --self list`.
 
-            The additional `linux-x64-dm-odbc` and `linux-a64-dm-odbc` assets enable Swoole coroutine
-            PDO ODBC and require the system unixODBC runtime plus a separately installed, licensed
-            Dameng ODBC client matching the target architecture.
+            The standard `linux-x64` and `linux-a64` assets include PDO ODBC and Swoole coroutine
+            ODBC support. They require the system `libodbc.so.2` plus a separately installed vendor
+            ODBC driver matching the target architecture. Vendor drivers and credentials are not bundled.
+
+            The `linux-*-dm-odbc` files are temporary compatibility aliases of the standard Linux assets.
+            macOS assets remain self-contained and do not currently include ODBC support.
           files: |
             dist/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-*
-            dist/build-meta-linux-*-dm-odbc.json
+            dist/build-meta-*.json
             dist/SHA256SUMS
             dist/build-meta.json
