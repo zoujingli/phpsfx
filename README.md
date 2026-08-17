@@ -1,8 +1,8 @@
 # phpsfx
 
-`phpsfx` 用于自动构建和发布多平台 **Swoole CLI PHP 8.4 静态运行时**。产物用于把 PHP 源码入口或可执行 Phar 追加进运行时后生成单文件可执行程序。
+`phpsfx` 用于自动构建和发布多平台 **Swoole CLI PHP 8.4 运行时**。产物用于把 PHP 源码入口或可执行 Phar 追加进运行时后生成单文件可执行程序。
 
-默认产物继续静态内置其扩展和第三方库；达梦 ODBC 专用产物是例外，它会动态依赖部署机的 unixODBC 和达梦官方 ODBC 客户端。
+四个平台的默认产物内置 MySQL 和 SQLite，不依赖 ODBC 环境；同一 Release 另外提供通用 `-odbc` 产物，增加 PDO ODBC 和 Swoole 协程 ODBC 能力。ODBC 产物动态依赖部署机的 unixODBC，具体数据库的厂商驱动、DSN、客户端依赖和凭据由部署环境提供。
 
 运行时使用 Swoole CLI 官方 SFX 格式：
 
@@ -24,21 +24,31 @@ swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 | Linux ARM64 | `swoole-cli-php8.4-linux-a64` |
 | macOS x86_64 | `swoole-cli-php8.4-macos-x64` |
 | macOS ARM64 | `swoole-cli-php8.4-macos-a64` |
-| Linux x86_64 + 达梦 ODBC | `swoole-cli-php8.4-linux-x64-dm-odbc` |
-| Linux ARM64 + 达梦 ODBC | `swoole-cli-php8.4-linux-a64-dm-odbc` |
+| Linux x86_64 + ODBC | `swoole-cli-php8.4-linux-x64-odbc` |
+| Linux ARM64 + ODBC | `swoole-cli-php8.4-linux-a64-odbc` |
+| macOS x86_64 + ODBC | `swoole-cli-php8.4-macos-x64-odbc` |
+| macOS ARM64 + ODBC | `swoole-cli-php8.4-macos-a64-odbc` |
+
+ODBC 产物不绑定达梦或任何数据库厂商，也不发布厂商专用命名的重复产物。
 
 同时发布：
 
 - `SHA256SUMS`
 - `build-meta.json`
-- `build-meta-linux-x64-dm-odbc.json`
-- `build-meta-linux-a64-dm-odbc.json`
+- `build-meta-linux-x64.json`
+- `build-meta-linux-a64.json`
+- `build-meta-macos-x64.json`
+- `build-meta-macos-a64.json`
+- `build-meta-linux-x64-odbc.json`
+- `build-meta-linux-a64-odbc.json`
+- `build-meta-macos-x64-odbc.json`
+- `build-meta-macos-a64-odbc.json`
 
 首版不发布 Windows 产物。
 
 ## 内置扩展与裁剪
 
-默认使用 `scripts/profiles/hyperfadmin-slim.env`，只保留 SFX、Swoole 服务、Phar 发布、数据库、基础网络、图片处理、二维码压缩和 OPcache 常用扩展：
+四个平台默认产物使用 `scripts/profiles/hyperfadmin-slim.env`，ODBC 产物使用在它之上启用 ODBC 的 `scripts/profiles/hyperfadmin-odbc.env`。两者都只保留 SFX、Swoole 服务、Phar 发布、数据库、基础网络、图片处理、二维码压缩和 OPcache 常用扩展：
 
 ```text
 bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,
@@ -57,7 +67,7 @@ xlswriter,xsl,yaml
 
 构建脚本还会把 Swoole CLI 上游默认的 full profile 收敛为 `PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS`，并进一步裁剪底层依赖：
 
-- Swoole 扩展：保留 server/coroutine/curl hook/mysqlnd/c-ares DNS，默认不启用 `pgsql/sqlite/odbc/ssh2/ftp/thread/brotli/zstd` 等未使用功能；其中 MySQL 协程化底层条件继续依赖 `mysqlnd`，SQLite 只提供 PHP 标准 `sqlite3/pdo_sqlite`，不默认启用 `--enable-swoole-sqlite`。
+- Swoole 扩展：保留 server/coroutine/curl hook/mysqlnd/c-ares DNS；ODBC Profile 额外通过 `--with-swoole-odbc=unixODBC,<prefix>` 启用 PDO ODBC 协程支持。默认不启用 `pgsql/sqlite/ssh2/ftp/thread/brotli/zstd` 等未使用功能；其中 MySQL 协程化底层条件继续依赖 `mysqlnd`，SQLite 只提供 PHP 标准 `sqlite3/pdo_sqlite`，不默认启用 `--enable-swoole-sqlite`。
 - libcurl：保留 HTTP(S)、OpenSSL、zlib、c-ares，默认不启用 HTTP3、SSH2、IDN、PSL、Brotli、Zstd。
 - libzip：保留 Zip + zlib + OpenSSL，默认不启用 LZMA、Zstd。
 - zlib：移除上游模板中与 zlib 构建无关的额外依赖。
@@ -93,11 +103,13 @@ https://github.com/swoole/swoole-src.git
 
 ## 本地 / WSL 调试
 
-WSL 或 Linux x86_64 本地只构建当前平台：
+WSL 或 Linux x86_64 本地构建 ODBC 产物前，先安装 unixODBC 开发包，然后指定通用 ODBC Profile：
 
 ```bash
 cd /mnt/d/WebRoot/phpsfx
+sudo apt-get install -y unixodbc unixodbc-dev
 PHPSFX_PLATFORM=linux-x64 \
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
 PHPSFX_PHP_VERSION=8.4 \
 PHPSFX_SWOOLE_CLI_REF=v6.2.0.0 \
 PHPSFX_SWOOLE_SRC_REF=v6.2.2 \
@@ -105,6 +117,14 @@ PHPSFX_SWOOLE_SRC_REF=v6.2.2 \
 ```
 
 构建完成后输出到 `dist/`。
+
+macOS 使用 Homebrew unixODBC：
+
+```bash
+brew install unixodbc sqliteodbc
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
+  bash scripts/build-swoole-cli.sh macos-a64
+```
 
 如果本地已经安装了同版本 Swoole CLI（例如 `/usr/local/bin/php` 输出 `Swoole 6.2.2`），可以先导入为 phpsfx 标准命名产物，用于快速验证下游打包链路。注意官方 full runtime 通常包含 `mongodb/imagick/mysqli/intl` 等额外扩展，导入时如只是本地调试可显式允许额外扩展；正式发布仍应使用源码构建的 slim 产物：
 
@@ -120,43 +140,49 @@ PHPSFX_SWOOLE_SRC_REF=v6.2.2 \
 ```bash
 # 使用依赖镜像，适合网络不稳定时。
 PHPSFX_DOWNLOAD_MIRROR_URL=https://example.com \
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
   bash scripts/build-swoole-cli.sh linux-x64
 
 # 临时调整扩展裁剪。
 PHPSFX_SWOOLE_CLI_PREPARE_FLAGS='+redis +swoole +pdo_mysql +pdo_sqlite +sqlite3 +xml -mongodb' \
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
   bash scripts/build-swoole-cli.sh linux-x64
 ```
 
-> Linux/macOS 构建均依赖本机编译工具链。CI 会安装基础依赖；本地请参考 Swoole CLI 官方 Linux/macOS 构建文档准备环境。
+> Linux/macOS 构建均依赖本机编译工具链。默认 Profile 生成无 ODBC 依赖的基础产物；只有显式使用 ODBC Profile 才生成 `-odbc` 产物。
 
-## 达梦 ODBC 专用运行时
+## 通用 ODBC 运行时
 
-达梦专用产物使用 Swoole 6.2.2 自带的 PHP 8.4 协程 PDO ODBC 驱动。它只提供运行时连接能力，不包含达梦客户端、配置、账号、密码或达梦 Go 驱动源码，也不代表业务 SQL、迁移和 MySQL 方言已经兼容达梦。
+四个平台的 `-odbc` 产物使用 Swoole 6.2.2 自带的 PHP 8.4 协程 PDO ODBC 驱动。它只提供统一连接接口，不包含 unixODBC、任何数据库厂商客户端、DSN、账号或密码，也不代表 SQL 方言、迁移、分页、标识符、字段类型和字符集已经兼容目标数据库。
 
-完整的环境准备、架构与 glibc 要求、官方客户端安装、unixODBC 配置、systemd 环境、预检、真实验收和故障处理见 [达梦 ODBC 专用运行时环境与使用](docs/dameng-odbc-runtime.md)。
+通用安装、PHP 接口、服务环境和 MySQL、SQLite、PostgreSQL、SQL Server、Oracle，以及达梦、人大金仓、openGauss/GaussDB、OceanBase、GBase、神通、瀚高、Vastbase、TiDB、GoldenDB 等国产数据库接入路径见 [ODBC 环境与常见数据库接入](docs/odbc-runtime.md)。达梦的官方客户端安装、真实连库脚本和生产验收边界见 [达梦 ODBC 环境与真实验收](docs/dameng-odbc-runtime.md)。
 
-当前为 Linux x86_64、Linux ARM64 提供构建产物和验收脚本。构建机需要 unixODBC 开发头文件，运行机需要 `libodbc.so.2` 和与系统架构匹配的达梦官方 ODBC 客户端。为了在运行时加载系统 unixODBC，专用产物不是全静态 ELF，部署机还需满足对应 Release 构建基线的 Linux 动态运行时 ABI：
+ODBC 构建机需要 unixODBC 开发头文件，运行机需要 Linux `libodbc.so.2` 或 macOS `libodbc.2.dylib`。只有实际连接某个数据库时才需要安装与平台、架构匹配的厂商 ODBC 驱动；但 `-odbc` 运行时本身启动时就需要 unixODBC Driver Manager。
 
 ```bash
 # 在已有本项目 Linux 构建工具链的主机上增加 ODBC 构建依赖。
 # 达梦客户端仍需按官方文档在部署机另行安装。
 sudo apt-get install -y unixodbc unixodbc-dev binutils
 
-PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-dm-odbc.env \
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
   bash scripts/build-swoole-cli.sh linux-x64
 
-PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-dm-odbc.env \
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
   bash scripts/build-swoole-cli.sh linux-a64
+
+brew install unixodbc sqliteodbc
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
+  bash scripts/build-swoole-cli.sh macos-a64
 ```
 
-两个命令都必须在对应架构的 Linux 主机原生执行，不能用 x86_64 主机构建 ARM64 产物。源码构建输出、Release 下载校验和生产部署依赖以完整环境手册为准。
+每个命令都必须在对应操作系统和架构的主机原生执行。源码构建输出、Release 下载校验和生产部署依赖以完整环境手册为准。
 
-构建脚本会拒绝将 unixODBC 静态链接进专用产物，并校验以下能力：
+构建脚本会拒绝将 unixODBC 静态链接进 ODBC 产物，并校验以下能力：
 
 - `PDO::getAvailableDrivers()` 包含 `odbc`。
 - `SWOOLE_HOOK_PDO_ODBC` 已定义并包含在 `SWOOLE_HOOK_ALL` 中。
 - `php --ri swoole` 报告 `coroutine_odbc => enabled`。
-- ELF 动态依赖中存在 `libodbc.so.2`，默认 Linux 产物则不得存在任何 `libodbc.so*` 依赖。
+- Linux ODBC 产物依赖 `libodbc.so.2`，macOS ODBC 产物依赖 `libodbc.2.dylib`；默认产物不得意外出现 ODBC 动态依赖。
 
 部署时按达梦官方 ODBC 文档配置驱动和命名 DSN，`odbc.ini` 中不要保存账号或密码。实测达梦官方 Linux ODBC 驱动时，PDO 的 DSN 应使用 `odbc:<unixODBC DSN 名>`（例如 `odbc:dm-prod`），账号和密码继续通过 `PDO` 的独立参数传入。应用只从环境或密钥管理系统读取连接信息。最小连接示例：
 
@@ -175,10 +201,10 @@ $pdo = new PDO(
 
 ```bash
 bash scripts/test-dameng-odbc.sh \
-  dist/swoole-cli-php8.4-linux-x64-dm-odbc
+  dist/swoole-cli-php8.4-linux-x64-odbc
 
 bash scripts/test-dameng-odbc.sh \
-  dist/swoole-cli-php8.4-linux-a64-dm-odbc
+  dist/swoole-cli-php8.4-linux-a64-odbc
 ```
 
 在隔离的验收账号和测试 schema 中设置 `PHPSFX_DM_ODBC_ALLOW_WRITE=1`，可进一步验证参数绑定、中文、数值、时间、事务、错误传播和并发连接。脚本创建唯一测试表并在 `finally` 中精确删除；不要对未授权的生产账号启用写入验收。
@@ -193,7 +219,7 @@ bash scripts/test-dameng-odbc.sh \
 - 数字版本的 `PHPSFX_SWOOLE_SRC_REF` 与运行时 `SWOOLE_VERSION` 完全一致。
 - `swoole`、`redis`、`pdo_mysql`、`pdo_sqlite`、`sqlite3`、`openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter`、`bz2`、`gd`、`opcache` 等必需扩展已加载。
 - `SQLite3` 类、`SQLite3(":memory:")`、`PDO("sqlite::memory:")` 和 `PDO::getAvailableDrivers()` 中的 `sqlite` 驱动可用。
-- 达梦专用产物额外校验 PDO ODBC 驱动、Swoole ODBC 协程 hook 和动态 unixODBC 依赖。
+- ODBC 产物额外校验 PDO ODBC 驱动、Swoole ODBC 协程 hook 和平台对应的动态 unixODBC 依赖。
 - `exif/gettext/gmp/imagick/intl/mongodb/mysqli/readline/session/soap/xlswriter/xsl/yaml` 等未使用扩展未被打包。
 
 发布矩阵还会使用 `tests/hyperf-smoke` 中固定版本的 Hyperf 3.2 最小应用启动 HTTP 服务，验证请求协程、Swoole 版本和 PDO SQLite 查询：
@@ -209,9 +235,10 @@ PHPSFX_EXPECTED_SWOOLE_VERSION=6.2.2 \
 ```bash
 PHPSFX_EXPECTED_PHP_PREFIX=8.4. \
 PHPSFX_EXPECTED_SWOOLE_VERSION=6.2.2 \
+PHPSFX_EXPECT_SWOOLE_ODBC=1 \
 PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,pdo_sqlite,sqlite3,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,bz2,gd,opcache \
 PHPSFX_FORBIDDEN_EXTENSIONS=exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,xlswriter,xsl,yaml \
-  bash scripts/validate-swoole-cli.sh dist/swoole-cli-php8.4-linux-x64
+  bash scripts/validate-swoole-cli.sh dist/swoole-cli-php8.4-linux-x64-odbc
 ```
 
 ## 下载 Release 运行时
@@ -226,11 +253,12 @@ bash scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
 bash scripts/download-release-asset.sh linux-x64 v0.1.0 /tmp/swoole-cli
 ```
 
-下载达梦 ODBC 专用产物：
+下载默认产物或 ODBC 产物：
 
 ```bash
-bash scripts/download-release-asset.sh linux-x64-dm-odbc latest /tmp/swoole-cli-dm
-bash scripts/download-release-asset.sh linux-a64-dm-odbc latest /tmp/swoole-cli-dm-arm64
+bash scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
+bash scripts/download-release-asset.sh linux-x64-odbc latest /tmp/swoole-cli-odbc
+bash scripts/download-release-asset.sh macos-a64-odbc latest /tmp/swoole-cli-odbc-macos
 ```
 
 ## PHP 源码打包

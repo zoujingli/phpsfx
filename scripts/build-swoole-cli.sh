@@ -68,7 +68,7 @@ Important environment variables:
   PHPSFX_ZLIB_SLIM_LIBRARY           Set to 1 to remove unrelated zlib library deps, default from profile: 1
   PHPSFX_REDIS_DISABLE_SESSION       Set to 1 to build redis without session hooks, default from profile: 1
   PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
-  PHPSFX_ASSET_SUFFIX                Optional release asset suffix, for example dm-odbc
+  PHPSFX_ASSET_SUFFIX                Optional release asset suffix
   PHPSFX_SWOOLE_ODBC                 Set to 1 to enable Swoole coroutine PDO ODBC support
   PHPSFX_SWOOLE_ODBC_PREFIX          unixODBC include/library prefix, default: /usr
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
@@ -147,6 +147,39 @@ if (file_put_contents($path, $contents) === false) {
 }
 ' "${generated_make}"
   echo "Configured dynamic Linux linking for system unixODBC" >&2
+}
+
+patch_swoole_odbc_configure_probe() {
+  local config_m4="${SWOOLE_CLI_DIR}/ext/swoole/config.m4"
+
+  php -r '
+$path = $argv[1];
+$contents = file_get_contents($path);
+if ($contents === false) {
+    fwrite(STDERR, "Unable to read Swoole config.m4\n");
+    exit(1);
+}
+$replacements = [
+    "      SAVE_LIBS=\"\$LIBS\"\n      LIBS=\"\$LIBS \$PDO_ODBC_LDFLAGS\"\n" =>
+        "      SAVE_CPPFLAGS=\"\$CPPFLAGS\"\n      SAVE_LIBS=\"\$LIBS\"\n" .
+        "      CPPFLAGS=\"\$CPPFLAGS \$PDO_ODBC_INCLUDE\"\n      LIBS=\"\$LIBS \$PDO_ODBC_LDFLAGS\"\n",
+    "      LIBS=\"\$SAVE_LIBS\"\n\n      AC_DEFINE(SW_USE_ODBC" =>
+        "      LIBS=\"\$SAVE_LIBS\"\n      CPPFLAGS=\"\$SAVE_CPPFLAGS\"\n\n      AC_DEFINE(SW_USE_ODBC",
+];
+foreach ($replacements as $search => $replacement) {
+    $count = substr_count($contents, $search);
+    if ($count !== 1) {
+        fwrite(STDERR, sprintf("Expected one Swoole ODBC configure probe anchor, found %d\n", $count));
+        exit(1);
+    }
+    $contents = str_replace($search, $replacement, $contents);
+}
+if (file_put_contents($path, $contents) === false) {
+    fwrite(STDERR, "Unable to update Swoole config.m4\n");
+    exit(1);
+}
+' "${config_m4}"
+  echo "Applied unixODBC include flags to Swoole configure probes" >&2
 }
 
 sha256_file() {
@@ -376,8 +409,8 @@ return function (Preprocessor $p) {
     // HyperfAdmin slim profile:
     // 保留 Swoole HTTP/TCP/WebSocket server、coroutine、mysqlnd、curl hook 和 c-ares DNS 能力；
     // SQLite 仅启用 PHP 标准 sqlite3/pdo_sqlite，不启用 Swoole 的 sqlite 协程 hook。
-    // 默认不启用 pgsql/odbc/ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
-    // 达梦专用 profile 通过系统 unixODBC 动态启用 Swoole 的协程 PDO ODBC 驱动。
+    // 默认不启用 pgsql/ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
+    // ODBC profile 通过系统 unixODBC 动态启用 Swoole 的协程 PDO ODBC 驱动。
     $dependentLibraries = ['curl', 'openssl', 'cares', 'zlib'];
     $dependentExtensions = ['curl', 'openssl', 'sockets', 'mysqlnd', 'pdo'];
 
@@ -651,13 +684,6 @@ if [[ -n "${ASSET_SUFFIX}" && ! "${ASSET_SUFFIX}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; th
   exit 2
 fi
 if [[ "${SWOOLE_ODBC_ENABLED}" == "1" ]]; then
-  case "${PLATFORM}" in
-    linux-x64|linux-a64) ;;
-    *)
-      echo "Swoole ODBC profile supports Linux x86_64 and ARM64 only, got ${PLATFORM}" >&2
-      exit 2
-      ;;
-  esac
   if [[ "${SWOOLE_ODBC_PREFIX}" != /* || "${SWOOLE_ODBC_PREFIX}" =~ [[:space:],] ]]; then
     echo "PHPSFX_SWOOLE_ODBC_PREFIX must be an absolute path without whitespace or commas" >&2
     exit 2
@@ -676,6 +702,8 @@ require_command make
 require_command tar
 if [[ "${PLATFORM}" == linux-* ]]; then
   require_command readelf
+else
+  require_command otool
 fi
 
 export PHPSFX_SWOOLE_ODBC="${SWOOLE_ODBC_ENABLED}"
@@ -690,6 +718,9 @@ fi
 assert_target_php_version
 prime_swoole_extension_archive
 prime_pdo_sqlite_extension_source
+if [[ "${SWOOLE_ODBC_ENABLED}" == "1" ]]; then
+  patch_swoole_odbc_configure_probe
+fi
 apply_profile_patches
 mkdir -p "${GLOBAL_PREFIX}"
 
@@ -703,7 +734,7 @@ if [[ -n "${DOWNLOAD_MIRROR_URL}" ]]; then
   PREPARE_ARGS+=("--with-download-mirror-url=${DOWNLOAD_MIRROR_URL}")
 fi
 php prepare.php --without-docker=1 --with-parallel-jobs="${JOBS}" --with-global-prefix="${GLOBAL_PREFIX}" "${PREPARE_ARGS[@]}"
-if [[ "${SWOOLE_ODBC_ENABLED}" == "1" ]]; then
+if [[ "${SWOOLE_ODBC_ENABLED}" == "1" && "${PLATFORM}" == linux-* ]]; then
   enable_dynamic_odbc_linking
 fi
 
@@ -735,7 +766,18 @@ if [[ "${PLATFORM}" == linux-* ]]; then
     exit 1
   fi
   if [[ "${SWOOLE_ODBC_ENABLED}" == "0" && -n "${ODBC_DYNAMIC_DEPENDENCY}" ]]; then
-    echo "Default runtime unexpectedly depends on ${ODBC_DYNAMIC_DEPENDENCY}" >&2
+    echo "ODBC-disabled runtime unexpectedly depends on ${ODBC_DYNAMIC_DEPENDENCY}" >&2
+    exit 1
+  fi
+else
+  ODBC_DYNAMIC_DEPENDENCY=$(otool -L "${DIST_DIR}/${ASSET_NAME}" \
+    | awk '/libodbc(\.[0-9]+)*\.dylib/ { dependency = $1; sub(/^.*\//, "", dependency); print dependency; exit }')
+  if [[ "${SWOOLE_ODBC_ENABLED}" == "1" && "${ODBC_DYNAMIC_DEPENDENCY}" != "libodbc.2.dylib" ]]; then
+    echo "ODBC runtime must dynamically depend on libodbc.2.dylib; static or incompatible unixODBC linkage is not allowed" >&2
+    exit 1
+  fi
+  if [[ "${SWOOLE_ODBC_ENABLED}" == "0" && -n "${ODBC_DYNAMIC_DEPENDENCY}" ]]; then
+    echo "ODBC-disabled runtime unexpectedly depends on ${ODBC_DYNAMIC_DEPENDENCY}" >&2
     exit 1
   fi
 fi

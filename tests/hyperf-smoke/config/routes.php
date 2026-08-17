@@ -36,7 +36,7 @@ Router::get('/health', static function (): string {
                 ));
                 $odbcTableCreated = true;
                 $insert = $odbc->prepare(sprintf('INSERT INTO %s (id, value) VALUES (?, ?)', $odbcTable));
-                $insert->execute([1, '达梦-ODBC']);
+                $insert->execute([1, '标准-ODBC']);
 
                 $odbc->beginTransaction();
                 $insert->execute([2, 'rollback']);

@@ -80,20 +80,33 @@ jobs:
             asset_tail: macos-a64
             odbc: false
           - platform: linux-x64
-            variant: linux-x64-dm-odbc
+            variant: linux-x64-odbc
             runner: ubuntu-latest
-            profile: scripts/profiles/hyperfadmin-dm-odbc.env
-            asset_suffix: dm-odbc
-            asset_tail: linux-x64-dm-odbc
+            profile: scripts/profiles/hyperfadmin-odbc.env
+            asset_suffix: odbc
+            asset_tail: linux-x64-odbc
             odbc: true
           - platform: linux-a64
-            variant: linux-a64-dm-odbc
+            variant: linux-a64-odbc
             runner: ubuntu-24.04-arm
-            profile: scripts/profiles/hyperfadmin-dm-odbc.env
-            asset_suffix: dm-odbc
-            asset_tail: linux-a64-dm-odbc
+            profile: scripts/profiles/hyperfadmin-odbc.env
+            asset_suffix: odbc
+            asset_tail: linux-a64-odbc
             odbc: true
-
+          - platform: macos-x64
+            variant: macos-x64-odbc
+            runner: macos-15-intel
+            profile: scripts/profiles/hyperfadmin-odbc.env
+            asset_suffix: odbc
+            asset_tail: macos-x64-odbc
+            odbc: true
+          - platform: macos-a64
+            variant: macos-a64-odbc
+            runner: macos-15
+            profile: scripts/profiles/hyperfadmin-odbc.env
+            asset_suffix: odbc
+            asset_tail: macos-a64-odbc
+            odbc: true
     env:
       PHPSFX_PLATFORM: ${{ matrix.platform }}
       PHPSFX_PROFILE_FILE: ${{ matrix.profile }}
@@ -119,11 +132,28 @@ jobs:
             ninja-build p7zip-full pkg-config python3 python3-pip re2c tar unzip wget xz-utils yasm zip
 
       - name: Install ODBC build and smoke dependencies
-        if: matrix.odbc
+        if: matrix.odbc && runner.os == 'Linux'
         run: |
           set -eux
           sudo apt-get install -y libsqliteodbc unixodbc unixodbc-dev
           odbcinst -q -d
+
+      - name: Install macOS ODBC build and smoke dependencies
+        if: matrix.odbc && runner.os == 'macOS'
+        run: |
+          set -eux
+          brew install sqliteodbc unixodbc
+          echo "PHPSFX_SWOOLE_ODBC_PREFIX=$(brew --prefix unixodbc)" >> "${GITHUB_ENV}"
+          sqlite_odbc_driver="$(brew --prefix sqliteodbc)/lib/libsqlite3odbc.dylib"
+          odbcinst_file="$(brew --prefix)/etc/odbcinst.ini"
+          test -f "${sqlite_odbc_driver}"
+          mkdir -p "$(dirname "${odbcinst_file}")"
+          {
+            printf '%s\n' '[SQLite3]'
+            printf '%s\n' 'Description=SQLite3 ODBC Driver'
+            printf 'Driver=%s\n' "${sqlite_odbc_driver}"
+          } > "${odbcinst_file}"
+          odbcinst -q -d -n SQLite3
 
       - name: Install macOS build dependencies
         if: runner.os == 'macOS'
@@ -257,14 +287,28 @@ jobs:
           sha256sum swoole-cli-php"${PHPSFX_PHP_VERSION}"-* > SHA256SUMS
           cat SHA256SUMS
           test -s build-meta.json
-          for dm_platform in linux-x64 linux-a64; do
-            dm_asset="swoole-cli-php${PHPSFX_PHP_VERSION}-${dm_platform}-dm-odbc"
-            dm_meta="build-meta-${dm_platform}-dm-odbc.json"
-            test -s "${dm_asset}"
-            test -s "${dm_meta}"
-            grep -F "  ${dm_asset}" SHA256SUMS
-            jq -e '.swoole_odbc == true and .odbc_dynamic_dependency == "libodbc.so.2"' "${dm_meta}"
-            jq -e --arg asset "${dm_asset}" \
+          jq -e '.platforms | length == 8' build-meta.json
+          for platform in linux-x64 linux-a64 macos-x64 macos-a64; do
+            default_asset="swoole-cli-php${PHPSFX_PHP_VERSION}-${platform}"
+            default_meta="build-meta-${platform}.json"
+            odbc_asset="${default_asset}-odbc"
+            odbc_meta="build-meta-${platform}-odbc.json"
+            case "${platform}" in
+              linux-*) odbc_dependency=libodbc.so.2 ;;
+              macos-*) odbc_dependency=libodbc.2.dylib ;;
+            esac
+            test -s "${default_asset}"
+            test -s "${default_meta}"
+            test -s "${odbc_asset}"
+            test -s "${odbc_meta}"
+            grep -F "  ${default_asset}" SHA256SUMS
+            grep -F "  ${odbc_asset}" SHA256SUMS
+            jq -e '.profile == "slim" and .swoole_odbc == false and .odbc_dynamic_dependency == ""' \
+              "${default_meta}"
+            jq -e --arg dependency "${odbc_dependency}" \
+              '.profile == "hyperfadmin-odbc" and .swoole_odbc == true and .odbc_dynamic_dependency == $dependency' \
+              "${odbc_meta}"
+            jq -e --arg asset "${odbc_asset}" \
               '.platforms | any(.asset == $asset and .swoole_odbc == true)' build-meta.json
           done
 
@@ -276,7 +320,7 @@ jobs:
           if-no-files-found: error
           path: |
             dist/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-*
-            dist/build-meta-linux-*-dm-odbc.json
+            dist/build-meta-*.json
             dist/SHA256SUMS
             dist/build-meta.json
 
@@ -297,11 +341,12 @@ jobs:
 
             Run packed applications with `--self`, for example `./app --self list`.
 
-            The additional `linux-x64-dm-odbc` and `linux-a64-dm-odbc` assets enable Swoole coroutine
-            PDO ODBC and require the system unixODBC runtime plus a separately installed, licensed
-            Dameng ODBC client matching the target architecture.
+            The four default assets include native MySQL and SQLite support without an ODBC runtime
+            dependency. The optional `*-odbc` assets add PDO ODBC and Swoole coroutine ODBC support;
+            they require the system unixODBC runtime plus a separately installed vendor driver matching
+            the target platform and architecture. Vendor drivers and credentials are not bundled.
           files: |
             dist/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-*
-            dist/build-meta-linux-*-dm-odbc.json
+            dist/build-meta-*.json
             dist/SHA256SUMS
             dist/build-meta.json

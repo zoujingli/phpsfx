@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 
 if [[ $# -ne 1 ]]; then
-  echo "Usage: scripts/test-dameng-odbc.sh <swoole-cli-dm-odbc>" >&2
+  echo "Usage: scripts/test-dameng-odbc.sh <linux-swoole-cli>" >&2
   exit 2
 fi
 
