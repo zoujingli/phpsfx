@@ -5,8 +5,6 @@
 - `swoole-cli-php8.4-linux-x64`
 - `swoole-cli-php8.4-linux-a64`
 
-`linux-x64-dm-odbc` 和 `linux-a64-dm-odbc` 是为兼容 `v0.0.34` 部署脚本暂时保留的同内容下载别名，新部署应使用上面的标准文件名。
-
 运行时只提供 PHP PDO ODBC 和 Swoole 协程 ODBC 能力。它不包含达梦客户端、许可证、数据库配置、DSN、账号或密码，也不证明智慧厨房业务 SQL、分页、迁移和 MySQL 方言已经兼容达梦。unixODBC 基础环境和其它厂商配置见 [Linux ODBC 环境与常见数据库配置](odbc-runtime.md)。
 
 首次部署按以下顺序执行：

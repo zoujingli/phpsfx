@@ -239,26 +239,16 @@ jobs:
           find dist -maxdepth 1 -type f -print | sort
           python3 scripts/merge-build-meta.py dist dist/build-meta.json
           cd dist
-          # Keep the v0.0.34 Dameng-specific names as temporary download aliases.
-          for linux_platform in linux-x64 linux-a64; do
-            cp -p \
-              "swoole-cli-php${PHPSFX_PHP_VERSION}-${linux_platform}" \
-              "swoole-cli-php${PHPSFX_PHP_VERSION}-${linux_platform}-dm-odbc"
-          done
           sha256sum swoole-cli-php"${PHPSFX_PHP_VERSION}"-* > SHA256SUMS
           cat SHA256SUMS
           test -s build-meta.json
           jq -e '.platforms | length == 4' build-meta.json
           for linux_platform in linux-x64 linux-a64; do
             linux_asset="swoole-cli-php${PHPSFX_PHP_VERSION}-${linux_platform}"
-            linux_alias="${linux_asset}-dm-odbc"
             linux_meta="build-meta-${linux_platform}.json"
             test -s "${linux_asset}"
-            test -s "${linux_alias}"
             test -s "${linux_meta}"
-            cmp "${linux_asset}" "${linux_alias}"
             grep -F "  ${linux_asset}" SHA256SUMS
-            grep -F "  ${linux_alias}" SHA256SUMS
             jq -e \
               '.profile == "hyperfadmin-odbc" and .swoole_odbc == true and .odbc_dynamic_dependency == "libodbc.so.2"' \
               "${linux_meta}"
@@ -303,7 +293,6 @@ jobs:
             ODBC support. They require the system `libodbc.so.2` plus a separately installed vendor
             ODBC driver matching the target architecture. Vendor drivers and credentials are not bundled.
 
-            The `linux-*-dm-odbc` files are temporary compatibility aliases of the standard Linux assets.
             macOS assets remain self-contained and do not currently include ODBC support.
           files: |
             dist/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-*

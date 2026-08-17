@@ -9,7 +9,6 @@ Usage: scripts/download-release-asset.sh <platform> [version] [output-file]
 Examples:
   scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
   scripts/download-release-asset.sh linux-a64 latest /tmp/swoole-cli-arm64
-  scripts/download-release-asset.sh linux-x64-dm-odbc latest /tmp/swoole-cli-dm  # compatibility alias
   scripts/download-release-asset.sh macos-a64 v0.1.0 ./swoole-cli
 
 Environment:
@@ -28,7 +27,7 @@ PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
 ASSET_PREFIX=${PHPSFX_ASSET_PREFIX:-swoole-cli}
 
 case "${PLATFORM}" in
-  linux-x64|linux-x64-dm-odbc|linux-a64|linux-a64-dm-odbc|macos-x64|macos-a64) ;;
+  linux-x64|linux-a64|macos-x64|macos-a64) ;;
   *) echo "Unsupported platform: ${PLATFORM}" >&2; exit 2 ;;
 esac
 

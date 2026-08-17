@@ -25,12 +25,7 @@ swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 | macOS x86_64 | `swoole-cli-php8.4-macos-x64` |
 | macOS ARM64 | `swoole-cli-php8.4-macos-a64` |
 
-Linux x86_64 和 ARM64 的标准文件名已包含 ODBC。为兼容 `v0.0.34` 的部署脚本，Release 暂时同时提供以下内容完全相同的下载别名；新部署不要再依赖这些名称：
-
-```text
-swoole-cli-php8.4-linux-x64-dm-odbc
-swoole-cli-php8.4-linux-a64-dm-odbc
-```
+Linux x86_64 和 ARM64 的标准文件名已包含 ODBC，不再发布数据库厂商专用命名的重复产物。
 
 同时发布：
 
@@ -238,14 +233,11 @@ bash scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
 bash scripts/download-release-asset.sh linux-x64 v0.1.0 /tmp/swoole-cli
 ```
 
-Linux 标准下载名称已经包含 ODBC；旧名称仅用于兼容已有部署脚本：
+Linux 标准下载名称已经包含 ODBC：
 
 ```bash
 bash scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
 bash scripts/download-release-asset.sh linux-a64 latest /tmp/swoole-cli-arm64
-
-# 临时兼容别名
-bash scripts/download-release-asset.sh linux-x64-dm-odbc latest /tmp/swoole-cli-dm
 ```
 
 ## PHP 源码打包

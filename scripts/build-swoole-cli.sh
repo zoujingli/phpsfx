@@ -68,7 +68,7 @@ Important environment variables:
   PHPSFX_ZLIB_SLIM_LIBRARY           Set to 1 to remove unrelated zlib library deps, default from profile: 1
   PHPSFX_REDIS_DISABLE_SESSION       Set to 1 to build redis without session hooks, default from profile: 1
   PHPSFX_ONIGURUMA_CLANG_COMPAT      Set to 1 to relax macOS clang oniguruma warnings, default from profile: 1
-  PHPSFX_ASSET_SUFFIX                Optional compatibility asset suffix, for example dm-odbc
+  PHPSFX_ASSET_SUFFIX                Optional release asset suffix
   PHPSFX_SWOOLE_ODBC                 Set to 1 to enable Swoole coroutine PDO ODBC support
   PHPSFX_SWOOLE_ODBC_PREFIX          unixODBC include/library prefix, default: /usr
   PHPSFX_GLOBAL_PREFIX               Dependency install prefix, default: .build/swoole-cli/.global-prefix/<platform>
