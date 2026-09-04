@@ -377,7 +377,7 @@ prime_pdo_sqlite_extension_source() {
 }
 
 apply_profile_patches() {
-  local enabled_file pdo_sqlite_file swoole_file curl_file libzip_file zlib_file redis_file oniguruma_file prepare_file ext
+  local enabled_file pdo_sqlite_file swoole_file curl_file libiconv_file libzip_file zlib_file redis_file oniguruma_file prepare_file ext
 
   # v6.2.2.0 会为可选 SDK 构建无条件拉取 phpx master。当前构建只生成 swoole-cli，
   # make.sh all-library/config/build 均不使用 phpx；移除该步骤以避免浮动依赖和无关网络失败。
@@ -407,6 +407,30 @@ if ($start !== false) {
     fwrite(STDERR, "Disabled unused phpx download\n");
 }
 ' "${prepare_file}"
+
+  # ftpmirror.gnu.org 当前会在 GitHub runner 上持续返回 502；GNU 主站提供同一份
+  # libiconv 归档，后续仍由上游 builder 的 MD5 校验内容。
+  libiconv_file="${SWOOLE_CLI_DIR}/sapi/src/builder/library/libiconv.php"
+  php -r '
+$path = $argv[1];
+$contents = file_get_contents($path);
+if ($contents === false) {
+    fwrite(STDERR, "Unable to read libiconv builder\n");
+    exit(1);
+}
+$search = "https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.17.tar.gz";
+$replace = "https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.17.tar.gz";
+$count = substr_count($contents, $search);
+if ($count !== 1) {
+    fwrite(STDERR, sprintf("Expected one libiconv download URL, found %d\n", $count));
+    exit(1);
+}
+if (file_put_contents($path, str_replace($search, $replace, $contents)) === false) {
+    fwrite(STDERR, "Unable to update libiconv builder\n");
+    exit(1);
+}
+' "${libiconv_file}"
+  echo "Applied stable GNU libiconv download URL" >&2
 
   # Swoole CLI 上游默认启用 full profile；这里将默认启用列表改为 profile 明确声明的最小集合，
   # 防止 prepare.php 在解析依赖时下载 intl/imagick/mongodb 等未使用组件。
@@ -593,7 +617,7 @@ return function (Preprocessor $p) {
         (new Library('libzip'))
             ->withHomePage('https://libzip.org/')
             ->withLicense('https://libzip.org/license/', Library::LICENSE_BSD)
-            ->withUrl('https://libzip.org/download/libzip-1.9.2.tar.gz')
+            ->withUrl('https://github.com/nih-at/libzip/releases/download/v1.9.2/libzip-1.9.2.tar.gz')
             ->withFileHash('md5', '345a88add7e9dd58aa029ac5b5b361ad')
             ->withManual('https://libzip.org')
             ->withPrefix($libzip_prefix)
