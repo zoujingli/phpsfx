@@ -16,6 +16,7 @@ fi
 chmod +x "${SWOOLE_CLI}"
 "${SWOOLE_CLI}" -r '
 $expectedPrefix = getenv("PHPSFX_EXPECTED_PHP_PREFIX") ?: "8.4.";
+$expectedVersion = trim(getenv("PHPSFX_EXPECTED_PHP_VERSION") ?: "");
 $expectedSwooleVersion = ltrim(trim(getenv("PHPSFX_EXPECTED_SWOOLE_VERSION") ?: ""), "vV");
 $required = array_values(array_filter(array_map("trim", explode(",", getenv("PHPSFX_REQUIRED_EXTENSIONS") ?: ""))));
 $forbidden = array_values(array_filter(array_map("trim", explode(",", getenv("PHPSFX_FORBIDDEN_EXTENSIONS") ?: ""))));
@@ -25,6 +26,9 @@ $errors = [];
 
 if (!str_starts_with(PHP_VERSION, $expectedPrefix)) {
     $errors[] = sprintf("PHP_VERSION %s does not start with %s", PHP_VERSION, $expectedPrefix);
+}
+if ($expectedVersion !== "" && PHP_VERSION !== $expectedVersion) {
+    $errors[] = sprintf("PHP_VERSION %s does not match %s", PHP_VERSION, $expectedVersion);
 }
 
 if (PHP_SAPI !== "cli") {
@@ -138,6 +142,7 @@ if (in_array("pdo_sqlite", $required, true)) {
 
 $result = [
     "php_version" => PHP_VERSION,
+    "expected_php_version" => $expectedVersion !== "" ? $expectedVersion : null,
     "php_sapi" => PHP_SAPI,
     "swoole_cli" => defined("SWOOLE_CLI"),
     "swoole_version" => defined("SWOOLE_VERSION") ? SWOOLE_VERSION : null,

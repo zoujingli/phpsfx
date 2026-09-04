@@ -17,9 +17,10 @@ fi
 PLATFORM=${1:-${PHPSFX_PLATFORM:-}}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
-SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
+SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.2.0}
 SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.2}
 EXPECTED_SWOOLE_VERSION=${PHPSFX_EXPECTED_SWOOLE_VERSION:-}
+EXPECTED_PHP_FULL_VERSION=
 if [[ -z "${EXPECTED_SWOOLE_VERSION}" && "${SWOOLE_SRC_REF}" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
   EXPECTED_SWOOLE_VERSION=${BASH_REMATCH[1]}
 fi
@@ -53,7 +54,7 @@ Platforms:
 Important environment variables:
   PHPSFX_PHP_VERSION                 PHP version prefix used for asset name and validation, default: 8.4
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
-  PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.2.0.0
+  PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.2.2.0
   PHPSFX_SWOOLE_SRC_REF              swoole-src tag, branch, or commit, default: v6.2.2
   PHPSFX_EXPECTED_SWOOLE_VERSION     Exact runtime Swoole version; inferred from numeric source tags
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
@@ -237,6 +238,9 @@ checkout_swoole_cli() {
       retry_command git fetch --force --tags origin
       git checkout --force "${SWOOLE_CLI_REF}"
     fi
+    # 上游仓库包含一份已同步的 PHP 源码；切换版本前清除旧 configure、对象文件等
+    # ignored 产物，避免它们的时间戳让 make 复用上一版 PHP。依赖下载池和已安装库保留。
+    git clean -fdqx -e pool -e .global-prefix
   fi
 
   # 清理上一次构建输出，但保留 pool/ 下载缓存，方便本地和 CI cache 复用依赖源码。
@@ -252,6 +256,24 @@ assert_target_php_version() {
 Swoole CLI ref ${SWOOLE_CLI_REF} targets PHP ${upstream_php_version}, not PHP ${PHP_VERSION}.x.
 Please choose a matching PHPSFX_SWOOLE_CLI_REF or set PHPSFX_PHP_VERSION=${upstream_php_version%.*}.
 ERROR
+    exit 1
+  fi
+  EXPECTED_PHP_FULL_VERSION=${upstream_php_version}
+}
+
+sync_php_source() {
+  local synced_php_version
+
+  if [[ ! -f "${SWOOLE_CLI_DIR}/sync-source-code.php" ]]; then
+    echo "Swoole CLI source sync script does not exist: ${SWOOLE_CLI_DIR}/sync-source-code.php" >&2
+    exit 1
+  fi
+
+  echo "Synchronizing PHP ${EXPECTED_PHP_FULL_VERSION} source into the Swoole CLI tree" >&2
+  php "${SWOOLE_CLI_DIR}/sync-source-code.php" --action run
+  synced_php_version=$(sed -n 's/^#define PHP_VERSION "\([^"]*\)"/\1/p' "${SWOOLE_CLI_DIR}/main/php_version.h")
+  if [[ "${synced_php_version}" != "${EXPECTED_PHP_FULL_VERSION}" ]]; then
+    echo "Synchronized PHP source reports ${synced_php_version:-unknown}, expected ${EXPECTED_PHP_FULL_VERSION}" >&2
     exit 1
   fi
 }
@@ -355,7 +377,36 @@ prime_pdo_sqlite_extension_source() {
 }
 
 apply_profile_patches() {
-  local enabled_file pdo_sqlite_file swoole_file curl_file libzip_file zlib_file redis_file oniguruma_file ext
+  local enabled_file pdo_sqlite_file swoole_file curl_file libzip_file zlib_file redis_file oniguruma_file prepare_file ext
+
+  # v6.2.2.0 会为可选 SDK 构建无条件拉取 phpx master。当前构建只生成 swoole-cli，
+  # make.sh all-library/config/build 均不使用 phpx；移除该步骤以避免浮动依赖和无关网络失败。
+  prepare_file="${SWOOLE_CLI_DIR}/prepare.php"
+  php -r '
+$path = $argv[1];
+$contents = file_get_contents($path);
+if ($contents === false) {
+    fwrite(STDERR, "Unable to read prepare.php\n");
+    exit(1);
+}
+$marker = "// 下载/更新 phpx-src";
+$start = strpos($contents, $marker);
+if ($start !== false) {
+    $end = strpos($contents, "\nif (\$p->getInputOption", $start);
+    if ($end === false) {
+        fwrite(STDERR, "Unable to locate the end of the phpx download block\n");
+        exit(1);
+    }
+    $contents = substr($contents, 0, $start)
+        . "// phpx is only needed by the optional SDK target; the runtime build does not use it.\n"
+        . substr($contents, $end + 1);
+    if (file_put_contents($path, $contents) === false) {
+        fwrite(STDERR, "Unable to update prepare.php\n");
+        exit(1);
+    }
+    fwrite(STDERR, "Disabled unused phpx download\n");
+}
+' "${prepare_file}"
 
   # Swoole CLI 上游默认启用 full profile；这里将默认启用列表改为 profile 明确声明的最小集合，
   # 防止 prepare.php 在解析依赖时下载 intl/imagick/mongodb 等未使用组件。
@@ -375,7 +426,7 @@ apply_profile_patches() {
     echo "Applied enabled extension profile: ${PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS}" >&2
   fi
 
-  # Swoole CLI v6.2.0.0 内置 sqlite3 builder，但没有单独的 pdo_sqlite builder。
+  # Swoole CLI v6.2.2.0 内置 sqlite3 builder，但没有单独的 pdo_sqlite builder。
   # slim profile 需要 PHP 标准 PDO SQLite 能力；这里仅启用 ext/pdo_sqlite，不启用 Swoole 的
   # --enable-swoole-sqlite hook，避免额外协程 hook 行为和构建面扩大。
   pdo_sqlite_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/pdo_sqlite.php"
@@ -716,6 +767,7 @@ else
   SWOOLE_CLI_COMMIT="${SWOOLE_CLI_REF} (archive)"
 fi
 assert_target_php_version
+sync_php_source
 prime_swoole_extension_archive
 prime_pdo_sqlite_extension_source
 if [[ "${SWOOLE_ODBC_ENABLED}" == "1" ]]; then
@@ -783,6 +835,7 @@ else
 fi
 
 PHPSFX_EXPECTED_PHP_PREFIX="${PHP_VERSION}." \
+PHPSFX_EXPECTED_PHP_VERSION="${EXPECTED_PHP_FULL_VERSION}" \
 PHPSFX_EXPECTED_SWOOLE_VERSION="${EXPECTED_SWOOLE_VERSION}" \
 PHPSFX_REQUIRED_EXTENSIONS="${EXPECTED_EXTENSIONS}" \
 PHPSFX_FORBIDDEN_EXTENSIONS="${FORBIDDEN_EXTENSIONS}" \

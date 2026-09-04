@@ -7,10 +7,15 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version, for example v0.1.0'
+        description: 'Release or workflow artifact version, for example v0.1.0'
         required: true
         default: 'v0.1.0'
         type: string
+      publish:
+        description: 'Create a GitHub Release after all builds and checks pass'
+        required: true
+        default: false
+        type: boolean
       php_version:
         description: 'PHP version line'
         required: true
@@ -19,7 +24,7 @@ on:
       swoole_cli_ref:
         description: 'swoole-cli branch, tag, or commit'
         required: true
-        default: 'v6.2.0.0'
+        default: 'v6.2.2.0'
         type: string
       swoole_src_ref:
         description: 'swoole-src branch, tag, or commit'
@@ -112,7 +117,7 @@ jobs:
       PHPSFX_PROFILE_FILE: ${{ matrix.profile }}
       PHPSFX_ASSET_SUFFIX: ${{ matrix.asset_suffix }}
       PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.4' }}
-      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.0.0' }}
+      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.2.0' }}
       PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.2' }}
       PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/${{ matrix.variant }}
       PHPSFX_BUILD_JOBS: 2
@@ -258,13 +263,13 @@ jobs:
             dist/${{ matrix.variant }}/build-meta-${{ matrix.asset_tail }}.json
 
   release:
-    name: Publish Release
+    name: Package and optionally publish
     runs-on: ubuntu-latest
     needs: build
     env:
       PHPSFX_RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
       PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.4' }}
-      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.0.0' }}
+      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.2.0' }}
       PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.2' }}
       PHPSFX_SWOOLE_CLI_PREPARE_FLAGS: ${{ github.event.inputs.prepare_flags }}
     steps:
@@ -325,6 +330,7 @@ jobs:
             dist/build-meta.json
 
       - name: Create GitHub Release
+        if: github.event_name == 'push' || inputs.publish
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.PHPSFX_RELEASE_VERSION }}

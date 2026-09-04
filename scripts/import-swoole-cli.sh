@@ -11,7 +11,7 @@ then validate it and generate build-meta-<platform>.json. This is intended for l
 tests against the recommended upstream release when the runtime is already installed.
 
 Environment:
-  PHPSFX_SWOOLE_CLI_REF     Swoole CLI ref recorded in metadata, default: v6.2.0.0
+  PHPSFX_SWOOLE_CLI_REF     Swoole CLI ref recorded in metadata, default: v6.2.2.0
   PHPSFX_SWOOLE_SRC_REF     swoole-src ref recorded in metadata, default: v6.2.2
   PHPSFX_EXPECTED_SWOOLE_VERSION Exact runtime Swoole version; inferred from numeric source tags
 USAGE
@@ -39,7 +39,7 @@ else
 fi
 
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
-SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.0.0}
+SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.2.0}
 SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.2}
 if [[ "${SWOOLE_SRC_REF}" =~ ^[0-9]+(\.[0-9]+)+([._-].*)?$ ]]; then
   SWOOLE_SRC_REF="v${SWOOLE_SRC_REF}"

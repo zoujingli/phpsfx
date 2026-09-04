@@ -83,7 +83,7 @@ GitHub Actions workflow：`.github/workflows/release.yml`。
 触发方式：
 
 - 推送 `v*` 标签：自动构建所有平台并创建 GitHub Release。
-- 手动运行 `Release swoole-cli`：可输入 `version`、`php_version`、`swoole_cli_ref`、`swoole_src_ref`、`prepare_flags`。
+- 手动运行 `Release swoole-cli`：可输入 `version`、`php_version`、`swoole_cli_ref`、`swoole_src_ref`、`prepare_flags`。默认只构建、校验并上传 workflow artifact；仅当 `publish=true` 时创建 GitHub Release。
 
 示例：
 
@@ -99,7 +99,7 @@ https://github.com/swoole/swoole-cli.git
 https://github.com/swoole/swoole-src.git
 ```
 
-默认 `swoole_cli_ref=v6.2.0.0`，构建脚本会覆盖使用 `swoole-src v6.2.2`。如果未来要固定官方 tag 或提交，可设置环境变量 `PHPSFX_SWOOLE_CLI_REF` / `PHPSFX_SWOOLE_SRC_REF`；非数字 ref 可通过 `PHPSFX_EXPECTED_SWOOLE_VERSION` 指定产物必须报告的扩展版本。
+默认 `swoole_cli_ref=v6.2.2.0`，目标为 PHP 8.4.25 和 `swoole-src v6.2.2`。构建脚本会按上游 `PHP-VERSION.conf` 同步 PHP 源码，并校验最终二进制的精确版本。如果未来要固定官方 tag 或提交，可设置环境变量 `PHPSFX_SWOOLE_CLI_REF` / `PHPSFX_SWOOLE_SRC_REF`；非数字 ref 可通过 `PHPSFX_EXPECTED_SWOOLE_VERSION` 指定产物必须报告的扩展版本。
 
 ## 本地 / WSL 调试
 
@@ -111,7 +111,7 @@ sudo apt-get install -y unixodbc unixodbc-dev
 PHPSFX_PLATFORM=linux-x64 \
 PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
 PHPSFX_PHP_VERSION=8.4 \
-PHPSFX_SWOOLE_CLI_REF=v6.2.0.0 \
+PHPSFX_SWOOLE_CLI_REF=v6.2.2.0 \
 PHPSFX_SWOOLE_SRC_REF=v6.2.2 \
   bash scripts/build-swoole-cli.sh
 ```
@@ -130,7 +130,7 @@ PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
 
 ```bash
 PHPSFX_ALLOW_EXTRA_EXTENSIONS=1 \
-PHPSFX_SWOOLE_CLI_REF=v6.2.0.0 \
+PHPSFX_SWOOLE_CLI_REF=v6.2.2.0 \
 PHPSFX_SWOOLE_SRC_REF=v6.2.2 \
   bash scripts/import-swoole-cli.sh linux-x64 /usr/local/bin/php
 ```
