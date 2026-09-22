@@ -170,8 +170,9 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set -eux
-          brew update
-          brew install autoconf automake bison cmake coreutils flex gettext libtool meson nasm ninja pkg-config re2c xz yasm || true
+          # Hosted macOS images already ship Homebrew and the required formula
+          # metadata. Avoid an unbounded repository update on Intel runners.
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install autoconf automake bison cmake coreutils flex gettext libtool meson nasm ninja pkg-config re2c xz yasm || true
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
