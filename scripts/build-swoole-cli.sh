@@ -156,6 +156,33 @@ if (file_put_contents($path, $contents) === false) {
   echo "Configured dynamic Linux linking for system unixODBC" >&2
 }
 
+preserve_library_link_order() {
+  local generated_make="${SWOOLE_CLI_DIR}/make.sh"
+
+  php -r '
+$path = $argv[1];
+$contents = file_get_contents($path);
+if ($contents === false) {
+    fwrite(STDERR, "Unable to read generated make.sh\n");
+    exit(1);
+}
+$search = "    export LIBS=\$(echo \$LIBS | tr \x27 \x27 \x27\\n\x27 | sort | uniq | tr \x27\\n\x27 \x27 \x27)\n";
+$replacement = "    # Preserve pkg-config dependency order for static archives.\n" .
+    "    export LIBS=\"\$LIBS\"\n";
+$count = substr_count($contents, $search);
+if ($count !== 1) {
+    fwrite(STDERR, sprintf("Expected one sorted LIBS directive, found %d\n", $count));
+    exit(1);
+}
+$contents = str_replace($search, $replacement, $contents);
+if (file_put_contents($path, $contents) === false) {
+    fwrite(STDERR, "Unable to update generated make.sh\n");
+    exit(1);
+}
+' "${generated_make}"
+  echo "Preserved pkg-config library link order" >&2
+}
+
 patch_swoole_odbc_configure_probe() {
   local config_m4="${SWOOLE_CLI_DIR}/ext/swoole/config.m4"
 
@@ -1131,6 +1158,7 @@ if [[ -n "${DOWNLOAD_MIRROR_URL}" ]]; then
   PREPARE_ARGS+=("--with-download-mirror-url=${DOWNLOAD_MIRROR_URL}")
 fi
 php prepare.php --without-docker=1 --with-parallel-jobs="${JOBS}" --with-global-prefix="${GLOBAL_PREFIX}" "${PREPARE_ARGS[@]}"
+preserve_library_link_order
 if [[ "${SWOOLE_ODBC_ENABLED}" == "1" && "${PLATFORM}" == linux-* ]]; then
   enable_dynamic_odbc_linking
 fi
