@@ -698,7 +698,11 @@ use SwooleCli\Preprocessor;
 
 return function (Preprocessor $p) {
     $pgsqlPrefix = PGSQL_PREFIX;
-    $ldflags = $p->isMacos() ? '' : ' -static ';
+    // libpq is built as a shared target by PostgreSQL's makefiles even when
+    // the installed static archive is used by the final CLI. Passing -static
+    // here makes Linux try to embed libc.a into libpq.so, which fails on
+    // glibc (and is unnecessary for the final static PHP link).
+    $ldflags = '';
     $libs = $p->isMacos() ? '-lc++' : '-lstdc++';
     $customEnvStart = $p->isMacos() ? 'export MACOSX_DEPLOYMENT_TARGET="$(sw_vers -productVersion)"' : '';
     $customEnvEnd = $p->isMacos() ? 'unset MACOSX_DEPLOYMENT_TARGET' : '';
