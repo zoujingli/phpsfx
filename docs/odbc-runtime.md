@@ -4,12 +4,12 @@
 
 适用 Release 文件：
 
-- `swoole-cli-php8.4-linux-x64-odbc`
-- `swoole-cli-php8.4-linux-a64-odbc`
-- `swoole-cli-php8.4-macos-x64-odbc`
-- `swoole-cli-php8.4-macos-a64-odbc`
+- `swoole-cli-php8.5-linux-x64-odbc`
+- `swoole-cli-php8.5-linux-a64-odbc`
+- `swoole-cli-php8.5-macos-x64-odbc`
+- `swoole-cli-php8.5-macos-a64-odbc`
 
-不使用 ODBC 时请选择不带 `-odbc` 的默认产物。默认产物仍包含 `pdo_mysql`、`pdo_sqlite` 和 `sqlite3`，进程启动不依赖 unixODBC。
+不使用 ODBC 时请选择不带 `-odbc` 的默认产物。默认产物包含 `pdo_mysql`、`pdo_pgsql` 和 `pdo_sqlite`，不加载 PHP `mysqli`、原生 `pgsql` 或 `SQLite3` 扩展，进程启动不依赖 unixODBC。
 
 ## 1. 能力与责任边界
 
@@ -195,7 +195,7 @@ odbc:<odbc.ini 节名>
 | 数据库 | 优先接入路线 | ODBC 驱动来源 | 关键确认项 |
 |--------|--------------|---------------|------------|
 | MySQL / MariaDB | 优先内置 `pdo_mysql`；需要统一 ODBC 时再使用 Connector/ODBC | MySQL 或 MariaDB 官方 | TLS、字符集、认证插件 |
-| SQLite | 优先内置 `pdo_sqlite`/`sqlite3`；ODBC 主要用于链路测试 | 系统仓库或 Homebrew `sqliteodbc` | 文件与目录写权限、WAL |
+| SQLite | 优先内置 `pdo_sqlite`；ODBC 主要用于链路测试 | 系统仓库或 Homebrew `sqliteodbc` | 文件与目录写权限、WAL |
 | PostgreSQL | psqlODBC | PostgreSQL 社区或系统仓库 | TLS、Unicode 驱动、时区 |
 | Microsoft SQL Server | Microsoft ODBC Driver 18 | 微软官方 | TLS CA、加密、认证方式 |
 | Oracle Database | Oracle Instant Client Basic + ODBC | Oracle 官方 | 客户端版本、服务名、Wallet/TNS |

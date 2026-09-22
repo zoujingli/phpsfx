@@ -11,8 +11,8 @@ then validate it and generate build-meta-<platform>.json. This is intended for l
 tests against the recommended upstream release when the runtime is already installed.
 
 Environment:
-  PHPSFX_SWOOLE_CLI_REF     Swoole CLI ref recorded in metadata, default: v6.2.2.0
-  PHPSFX_SWOOLE_SRC_REF     swoole-src ref recorded in metadata, default: v6.2.2
+  PHPSFX_SWOOLE_CLI_REF     Swoole CLI baseline commit recorded in metadata, default: f7903840c3e959612dac7d413205e1bdb0067029
+  PHPSFX_SWOOLE_SRC_REF     swoole-src ref recorded in metadata, default: v6.2.3
   PHPSFX_EXPECTED_SWOOLE_VERSION Exact runtime Swoole version; inferred from numeric source tags
 USAGE
   exit 2
@@ -38,9 +38,10 @@ else
   SOURCE_BIN=$2
 fi
 
-PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
-SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.2.0}
-SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.2}
+PHP_VERSION=${PHPSFX_PHP_VERSION:-8.5}
+PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.5.9}
+SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-f7903840c3e959612dac7d413205e1bdb0067029}
+SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.3}
 if [[ "${SWOOLE_SRC_REF}" =~ ^[0-9]+(\.[0-9]+)+([._-].*)?$ ]]; then
   SWOOLE_SRC_REF="v${SWOOLE_SRC_REF}"
 fi
@@ -50,9 +51,10 @@ if [[ -z "${EXPECTED_SWOOLE_VERSION}" && "${SWOOLE_SRC_REF}" =~ ^v?([0-9]+\.[0-9
 fi
 DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist"}
 PROFILE_NAME=${PHPSFX_PROFILE_NAME:-hyperfadmin-slim}
-EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,pdo_sqlite,sqlite3,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,bz2,gd,opcache,sodium,sockets}
-FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,xlswriter,xsl,yaml}
-DEFAULT_EXTENSIONS='bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,openssl,pcntl,pdo_mysql,pdo_sqlite,phar,posix,redis,simplexml,sockets,sodium,sqlite3,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
+EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,bz2,gd,opcache,sodium,sockets}
+FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-exif,gettext,gmp,imagick,intl,mongodb,mysqli,pgsql,readline,session,soap,sqlite3,xlswriter,xsl,yaml}
+REQUIRED_PDO_DRIVERS=${PHPSFX_REQUIRED_PDO_DRIVERS:-mysql,pgsql,sqlite}
+DEFAULT_EXTENSIONS='bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,openssl,pcntl,pdo_mysql,pdo_pgsql,pdo_sqlite,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
 
 case "${PLATFORM}" in
   linux-x64|linux-a64|macos-x64|macos-a64) ;;
@@ -76,9 +78,11 @@ cp "${SOURCE_BIN}" "${DIST_DIR}/${ASSET_NAME}"
 chmod +x "${DIST_DIR}/${ASSET_NAME}"
 
 PHPSFX_EXPECTED_PHP_PREFIX="${PHP_VERSION}." \
+PHPSFX_EXPECTED_PHP_VERSION="${PHP_FULL_VERSION}" \
 PHPSFX_EXPECTED_SWOOLE_VERSION="${EXPECTED_SWOOLE_VERSION}" \
 PHPSFX_REQUIRED_EXTENSIONS="${EXPECTED_EXTENSIONS}" \
 PHPSFX_FORBIDDEN_EXTENSIONS="${FORBIDDEN_EXTENSIONS}" \
+PHPSFX_REQUIRED_PDO_DRIVERS="${REQUIRED_PDO_DRIVERS}" \
   bash "${ROOT_DIR}/scripts/validate-swoole-cli.sh" "${DIST_DIR}/${ASSET_NAME}"
 
 PHP_FULL_VERSION=$("${DIST_DIR}/${ASSET_NAME}" -r 'echo PHP_VERSION;')
@@ -90,16 +94,19 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}.json" <<META
   "platform": "${PLATFORM}",
   "asset": "${ASSET_NAME}",
   "profile": "${PROFILE_NAME}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.0}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",
   "extensions": "${PHPSFX_EXTENSIONS:-${DEFAULT_EXTENSIONS}}",
   "required_extensions": "${EXPECTED_EXTENSIONS}",
+  "required_pdo_drivers": "${REQUIRED_PDO_DRIVERS}",
   "forbidden_extensions": "${FORBIDDEN_EXTENSIONS}",
   "swoole_cli_repo": "https://github.com/swoole/swoole-cli.git",
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
   "swoole_src_ref": "${SWOOLE_SRC_REF}",
   "swoole_cli_commit": "prebuilt-local",
+  "upstream_baseline_commit": "${SWOOLE_CLI_REF}",
   "prepare_flags": "prebuilt-local",
   "source_binary": "${SOURCE_BIN}",
   "sha256": "${SHA256}",

@@ -15,7 +15,7 @@ Examples:
 
 Environment:
   PHPSFX_RELEASE_REPO       GitHub repo, default: zoujingli/phpsfx
-  PHPSFX_PHP_VERSION        PHP version line, default: 8.4
+  PHPSFX_PHP_VERSION        PHP version line, default: 8.5
   PHPSFX_ASSET_PREFIX       Release asset prefix, default: swoole-cli
 USAGE
   exit 2
@@ -25,7 +25,7 @@ PLATFORM=$1
 VERSION=${2:-latest}
 OUTPUT=${3:-}
 REPO=${PHPSFX_RELEASE_REPO:-zoujingli/phpsfx}
-PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
+PHP_VERSION=${PHPSFX_PHP_VERSION:-8.5}
 ASSET_PREFIX=${PHPSFX_ASSET_PREFIX:-swoole-cli}
 
 case "${PLATFORM}" in

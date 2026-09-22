@@ -15,12 +15,15 @@ if [[ -n "${PROFILE_FILE}" && "${PROFILE_FILE}" != "none" ]]; then
 fi
 
 PLATFORM=${1:-${PHPSFX_PLATFORM:-}}
-PHP_VERSION=${PHPSFX_PHP_VERSION:-8.4}
+PHP_VERSION=${PHPSFX_PHP_VERSION:-8.5}
+PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.5.9}
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
-SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-v6.2.2.0}
-SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.2}
+# Official swoole-cli has no v6.2.3 release. Keep its v6.2.2.2 commit as the
+# auditable build baseline and apply the PHP 8.5/Swoole 6.2.3 changes locally.
+SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-f7903840c3e959612dac7d413205e1bdb0067029}
+SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.3}
 EXPECTED_SWOOLE_VERSION=${PHPSFX_EXPECTED_SWOOLE_VERSION:-}
-EXPECTED_PHP_FULL_VERSION=
+EXPECTED_PHP_FULL_VERSION=${PHP_FULL_VERSION}
 if [[ -z "${EXPECTED_SWOOLE_VERSION}" && "${SWOOLE_SRC_REF}" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
   EXPECTED_SWOOLE_VERSION=${BASH_REMATCH[1]}
 fi
@@ -34,11 +37,12 @@ if [[ "${GITHUB_ACTIONS:-}" == "true" && -z "${PHPSFX_BUILD_JOBS:-}" ]]; then
 fi
 JOBS=${PHPSFX_BUILD_JOBS:-${DEFAULT_JOBS}}
 PROFILE_NAME=${PHPSFX_PROFILE_NAME:-hyperfadmin-slim}
-DEFAULT_EXTENSIONS='bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,openssl,pcntl,pdo_mysql,pdo_sqlite,phar,posix,redis,simplexml,sockets,sodium,sqlite3,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
-DEFAULT_PREPARE_FLAGS='+bcmath +bz2 +ctype +curl +fileinfo +filter +gd +iconv +mbstring +opcache +openssl +pcntl +pdo_mysql +pdo_sqlite +phar +posix +redis +sockets +sodium +sqlite3 +swoole +tokenizer +xml +zip +zlib -exif -gettext -gmp -imagick -intl -mongodb -mysqli -readline -session -soap -xlswriter -xsl -yaml'
+DEFAULT_EXTENSIONS='bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,openssl,pcntl,pdo_mysql,pdo_pgsql,pdo_sqlite,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
+DEFAULT_PREPARE_FLAGS='+bcmath +bz2 +ctype +curl +fileinfo +filter +gd +iconv +mbstring +opcache +openssl +pcntl +pdo_mysql +pdo_pgsql +pdo_sqlite +phar +posix +redis +sockets +sodium +swoole +tokenizer +xml +zip +zlib -exif -gettext -gmp -imagick -intl -mongodb -mysqli -pgsql -readline -session -soap -sqlite3 -xlswriter -xsl -yaml'
 PREPARE_FLAGS=${PHPSFX_SWOOLE_CLI_PREPARE_FLAGS:-${DEFAULT_PREPARE_FLAGS}}
-EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,pdo_sqlite,sqlite3,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,bz2,gd,opcache,sodium,sockets}
-FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-exif,gettext,gmp,imagick,intl,mongodb,mysqli,readline,session,soap,xlswriter,xsl,yaml}
+EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,fileinfo,bcmath,bz2,gd,opcache,sodium,sockets}
+FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-exif,gettext,gmp,imagick,intl,mongodb,mysqli,pgsql,readline,session,soap,sqlite3,xlswriter,xsl,yaml}
+REQUIRED_PDO_DRIVERS=${PHPSFX_REQUIRED_PDO_DRIVERS:-mysql,pgsql,sqlite}
 DOWNLOAD_MIRROR_URL=${PHPSFX_DOWNLOAD_MIRROR_URL:-}
 ASSET_SUFFIX=${PHPSFX_ASSET_SUFFIX:-}
 SWOOLE_ODBC_ENABLED=${PHPSFX_SWOOLE_ODBC:-0}
@@ -52,13 +56,15 @@ Platforms:
   linux-x64, linux-a64, macos-x64, macos-a64
 
 Important environment variables:
-  PHPSFX_PHP_VERSION                 PHP version prefix used for asset name and validation, default: 8.4
+  PHPSFX_PHP_VERSION                 PHP version line used for asset name and validation, default: 8.5
+  PHPSFX_PHP_FULL_VERSION            Exact PHP release source/runtime version, default: 8.5.9
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
-  PHPSFX_SWOOLE_CLI_REF              Swoole CLI branch, tag, or commit, default: v6.2.2.0
-  PHPSFX_SWOOLE_SRC_REF              swoole-src tag, branch, or commit, default: v6.2.2
+  PHPSFX_SWOOLE_CLI_REF              Swoole CLI baseline commit, default: f7903840c3e959612dac7d413205e1bdb0067029
+  PHPSFX_SWOOLE_SRC_REF              swoole-src tag, branch, or commit, default: v6.2.3
   PHPSFX_EXPECTED_SWOOLE_VERSION     Exact runtime Swoole version; inferred from numeric source tags
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
   PHPSFX_REQUIRED_EXTENSIONS         Comma-separated runtime extensions checked after build
+  PHPSFX_REQUIRED_PDO_DRIVERS        Comma-separated PDO drivers checked after build, default: mysql,pgsql,sqlite
   PHPSFX_FORBIDDEN_EXTENSIONS        Comma-separated extensions that must not be loaded
   PHPSFX_ALLOW_EXTRA_EXTENSIONS      Set to 1 to skip forbidden-extension checks for local full-runtime smoke
   PHPSFX_PROFILE_FILE                Profile env file, default: scripts/profiles/hyperfadmin-slim.env
@@ -183,6 +189,36 @@ if (file_put_contents($path, $contents) === false) {
   echo "Applied unixODBC include flags to Swoole configure probes" >&2
 }
 
+patch_swoole_623_php85_compat() {
+  local misc_file="${SWOOLE_CLI_DIR}/ext/swoole/src/core/misc.cc"
+
+  if [[ ! -f "${misc_file}" ]] || ! grep -q 'sw_usleep(1000);' "${misc_file}"; then
+    return
+  fi
+
+  php -r '
+$path = $argv[1];
+$contents = file_get_contents($path);
+if ($contents === false) {
+    fwrite(STDERR, "Unable to read Swoole misc.cc\n");
+    exit(1);
+}
+$search = "        sw_usleep(1000);";
+$replacement = "        std::this_thread::sleep_for(std::chrono::microseconds(1000));";
+$count = substr_count($contents, $search);
+if ($count !== 1) {
+    fwrite(STDERR, sprintf("Expected one Swoole sw_usleep compatibility call, found %d\n", $count));
+    exit(1);
+}
+$contents = str_replace($search, $replacement, $contents);
+if (file_put_contents($path, $contents) === false) {
+    fwrite(STDERR, "Unable to update Swoole misc.cc\n");
+    exit(1);
+}
+' "${misc_file}"
+  echo "Applied Swoole 6.2.3 PHP 8.5 sleep compatibility patch" >&2
+}
+
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | awk '{print $1}'
@@ -251,14 +287,18 @@ checkout_swoole_cli() {
 assert_target_php_version() {
   local upstream_php_version
   upstream_php_version=$(tr -d '[:space:]' < sapi/PHP-VERSION.conf)
-  if [[ "${upstream_php_version}" != "${PHP_VERSION}."* ]]; then
-    cat >&2 <<ERROR
-Swoole CLI ref ${SWOOLE_CLI_REF} targets PHP ${upstream_php_version}, not PHP ${PHP_VERSION}.x.
-Please choose a matching PHPSFX_SWOOLE_CLI_REF or set PHPSFX_PHP_VERSION=${upstream_php_version%.*}.
-ERROR
+  if [[ "${PHP_FULL_VERSION}" != "${PHP_VERSION}."* ]]; then
+    echo "PHPSFX_PHP_FULL_VERSION=${PHP_FULL_VERSION} must belong to PHP ${PHP_VERSION}.x" >&2
     exit 1
   fi
-  EXPECTED_PHP_FULL_VERSION=${upstream_php_version}
+  if [[ "${upstream_php_version}" != "${PHP_VERSION}."* ]]; then
+    cat >&2 <<ERROR
+Swoole CLI ref ${SWOOLE_CLI_REF} baseline targets PHP ${upstream_php_version}; the local build target is ${PHP_FULL_VERSION}.
+ERROR
+    printf '%s\n' "${PHP_FULL_VERSION}" > sapi/PHP-VERSION.conf
+    echo "Applied local PHP source target ${PHP_FULL_VERSION} over upstream baseline ${upstream_php_version}" >&2
+  fi
+  EXPECTED_PHP_FULL_VERSION=${PHP_FULL_VERSION}
 }
 
 sync_php_source() {
@@ -276,6 +316,81 @@ sync_php_source() {
     echo "Synchronized PHP source reports ${synced_php_version:-unknown}, expected ${EXPECTED_PHP_FULL_VERSION}" >&2
     exit 1
   fi
+}
+
+patch_php85_opcache_registration() {
+  local main_file="${SWOOLE_CLI_DIR}/main/main.c"
+
+  if [[ ! -f "${main_file}" ]] || ! grep -q 'extern zend_extension zend_extension_entry;' "${main_file}"; then
+    return 0
+  fi
+
+  php -r '
+$path = $argv[1];
+$contents = file_get_contents($path);
+if ($contents === false) {
+    fwrite(STDERR, "Unable to read PHP main.c\n");
+    exit(1);
+}
+$block = "#ifdef PHP_ENABLE_OPCACHE\n\textern zend_extension zend_extension_entry;\n\tzend_register_extension(&zend_extension_entry, NULL);\n#endif\n";
+$count = substr_count($contents, $block);
+if ($count !== 1) {
+    fwrite(STDERR, sprintf("Expected one obsolete PHP 8.5 Opcache registration block, found %d\n", $count));
+    exit(1);
+}
+$contents = str_replace($block, "", $contents);
+if (file_put_contents($path, $contents) === false) {
+    fwrite(STDERR, "Unable to update PHP main.c\n");
+    exit(1);
+}
+' "${main_file}"
+  echo "Removed obsolete PHP 8.5 Opcache zend_extension_entry registration" >&2
+}
+
+patch_php85_opcache_module_stub() {
+  local patch_file="${SWOOLE_CLI_DIR}/sapi/cli/patch.c"
+
+  if [[ ! -f "${patch_file}" ]] || ! grep -q 'zend_module_entry opcache_module_entry = {' "${patch_file}"; then
+    return 0
+  fi
+
+  php -r '
+$path = $argv[1];
+$contents = file_get_contents($path);
+if ($contents === false) {
+    fwrite(STDERR, "Unable to read SFX patch.c\n");
+    exit(1);
+}
+$contents = str_replace("\r\n", "\n", $contents);
+$block = <<<'C'
+
+zend_module_entry opcache_module_entry = {
+    STANDARD_MODULE_HEADER_EX,
+    NULL,
+    NULL,
+    "opcache",
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    PHP_VERSION,
+    STANDARD_MODULE_PROPERTIES
+};
+C;
+$count = substr_count($contents, $block);
+if ($count !== 1) {
+    fwrite(STDERR, sprintf("Expected one PHP 8.5 Opcache module stub, found %d\n", $count));
+    exit(1);
+}
+$contents = str_replace($block, "", $contents);
+if (file_put_contents($path, $contents) === false) {
+    fwrite(STDERR, "Unable to update SFX patch.c\n");
+    exit(1);
+}
+' "${patch_file}"
+  echo "Removed obsolete PHP 8.5 Opcache module stub" >&2
 }
 
 prime_swoole_extension_archive() {
@@ -376,10 +491,53 @@ prime_pdo_sqlite_extension_source() {
   cp -R "${php_source_dir}/ext/pdo_sqlite/." "${SWOOLE_CLI_DIR}/ext/pdo_sqlite"
 }
 
-apply_profile_patches() {
-  local enabled_file pdo_sqlite_file swoole_file curl_file libiconv_file libzip_file zlib_file redis_file oniguruma_file prepare_file ext
+prime_php85_core_extensions() {
+  local php_source_dir extension
 
-  # v6.2.2.0 会为可选 SDK 构建无条件拉取 phpx master。当前构建只生成 swoole-cli，
+  php_source_dir="${SWOOLE_CLI_DIR}/var/php-${EXPECTED_PHP_FULL_VERSION}"
+  for extension in lexbor uri; do
+    if [[ -f "${SWOOLE_CLI_DIR}/ext/${extension}/config.m4" ]]; then
+      continue
+    fi
+    if [[ ! -f "${php_source_dir}/ext/${extension}/config.m4" ]]; then
+      echo "PHP ${EXPECTED_PHP_FULL_VERSION} source is missing ext/${extension}" >&2
+      exit 1
+    fi
+    echo "Priming PHP ${extension} source for PHP 8.5 compatibility" >&2
+    mkdir -p "${SWOOLE_CLI_DIR}/ext/${extension}"
+    cp -R "${php_source_dir}/ext/${extension}/." "${SWOOLE_CLI_DIR}/ext/${extension}"
+  done
+}
+
+prime_pdo_pgsql_extension_source() {
+  local php_source_dir
+
+  if [[ -f "${SWOOLE_CLI_DIR}/ext/pdo_pgsql/config.m4" ]]; then
+    return 0
+  fi
+
+  echo "Priming PHP pdo_pgsql extension source" >&2
+  require_command curl
+  php_source_dir=$(
+    cd "${SWOOLE_CLI_DIR}"
+    php -r 'ob_start(); $dir = require "sapi/scripts/download-php-src-archive.php"; fwrite(STDERR, ob_get_clean()); echo $dir;'
+  )
+
+  if [[ ! -f "${php_source_dir}/ext/pdo_pgsql/config.m4" ]]; then
+    echo "pdo_pgsql source is missing in PHP source tree: ${php_source_dir}/ext/pdo_pgsql" >&2
+    exit 1
+  fi
+
+  rm -rf "${SWOOLE_CLI_DIR}/ext/pdo_pgsql"
+  mkdir -p "${SWOOLE_CLI_DIR}/ext/pdo_pgsql"
+  cp -R "${php_source_dir}/ext/pdo_pgsql/." "${SWOOLE_CLI_DIR}/ext/pdo_pgsql"
+}
+
+apply_profile_patches() {
+  local enabled_file pdo_sqlite_file pdo_pgsql_file pgsql_file swoole_file curl_file libiconv_file libzip_file zlib_file redis_file oniguruma_file prepare_file ext php_m4_file
+
+  # The upstream baseline may pull phpx master for the optional SDK. This build
+  # only generates swoole-cli,
   # make.sh all-library/config/build 均不使用 phpx；移除该步骤以避免浮动依赖和无关网络失败。
   prepare_file="${SWOOLE_CLI_DIR}/prepare.php"
   php -r '
@@ -406,7 +564,45 @@ if ($start !== false) {
     }
     fwrite(STDERR, "Disabled unused phpx download\n");
 }
-' "${prepare_file}"
+  ' "${prepare_file}"
+
+  # PHP 8.5 removed the obsolete PHP_OUTPUT helper from php.m4, while the
+  # SFX CLI config still uses it to register sapi/cli/php.1. Restore only that
+  # compatibility macro locally instead of carrying the older PHP build file.
+  php_m4_file="${SWOOLE_CLI_DIR}/build/php.m4"
+  php -r '
+$path = $argv[1];
+$contents = file_get_contents($path);
+if ($contents === false) {
+    fwrite(STDERR, "Unable to read PHP build macros\n");
+    exit(1);
+}
+if (strpos($contents, "AC_DEFUN([PHP_OUTPUT]") === false) {
+    $marker = "dnl ----------------------------------------------------------------------------\ndnl Build system base macros.";
+    $macro = <<<'M4'
+dnl
+dnl PHP_OUTPUT(file)
+dnl
+dnl Compatibility helper retained by the SFX CLI config. PHP 8.5 removed
+dnl this obsolete macro in favor of AC_CONFIG_FILES.
+dnl
+AC_DEFUN([PHP_OUTPUT],
+[AC_CONFIG_FILES([$1])])
+
+M4;
+    $offset = strpos($contents, $marker);
+    if ($offset === false) {
+        fwrite(STDERR, "Unable to locate PHP build macro insertion point\n");
+        exit(1);
+    }
+    $contents = substr($contents, 0, $offset) . $macro . substr($contents, $offset);
+    if (file_put_contents($path, $contents) === false) {
+        fwrite(STDERR, "Unable to write PHP build macros\n");
+        exit(1);
+    }
+    fwrite(STDERR, "Restored PHP_OUTPUT compatibility macro for SFX CLI\n");
+}
+' "${php_m4_file}"
 
   # ftpmirror.gnu.org 当前会在 GitHub runner 上持续返回 502；GNU 主站提供同一份
   # libiconv 归档，后续仍由上游 builder 的 MD5 校验内容。
@@ -450,9 +646,8 @@ if (file_put_contents($path, str_replace($search, $replace, $contents)) === fals
     echo "Applied enabled extension profile: ${PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS}" >&2
   fi
 
-  # Swoole CLI v6.2.2.0 内置 sqlite3 builder，但没有单独的 pdo_sqlite builder。
-  # slim profile 需要 PHP 标准 PDO SQLite 能力；这里仅启用 ext/pdo_sqlite，不启用 Swoole 的
-  # --enable-swoole-sqlite hook，避免额外协程 hook 行为和构建面扩大。
+  # The upstream baseline has no dedicated PDO builders for this profile. Keep
+  # database support PDO-only and do not enable Swoole's SQLite coroutine hook.
   pdo_sqlite_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/pdo_sqlite.php"
   cat > "${pdo_sqlite_file}" <<'PHP'
 <?php
@@ -472,6 +667,102 @@ return function (Preprocessor $p) {
 PHP
   echo "Applied PDO SQLite extension builder" >&2
 
+  pdo_pgsql_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/pdo_pgsql.php"
+  cat > "${pdo_pgsql_file}" <<'PHP'
+<?php
+
+use SwooleCli\Extension;
+use SwooleCli\Preprocessor;
+
+return function (Preprocessor $p) {
+    $p->addExtension(
+        (new Extension('pdo_pgsql'))
+            ->withHomePage('https://www.php.net/pdo_pgsql')
+            ->withOptions('--with-pdo-pgsql')
+            ->withDependentLibraries('pgsql')
+            ->withDependentExtensions('pdo')
+    );
+};
+PHP
+  echo "Applied PDO PostgreSQL extension builder" >&2
+
+  # PostgreSQL's upstream builder is aimed at the server tree and pulls ICU,
+  # readline, libxml, libxslt, zstd and lz4. PDO needs only the libpq client;
+  # keep the dependency graph small and deterministic for the slim runtime.
+  pgsql_file="${SWOOLE_CLI_DIR}/sapi/src/builder/library/pgsql.php"
+  cat > "${pgsql_file}" <<'PHP'
+<?php
+
+use SwooleCli\Library;
+use SwooleCli\Preprocessor;
+
+return function (Preprocessor $p) {
+    $pgsqlPrefix = PGSQL_PREFIX;
+    $ldflags = $p->isMacos() ? '' : ' -static ';
+    $libs = $p->isMacos() ? '-lc++' : '-lstdc++';
+    $customEnvStart = $p->isMacos() ? 'export MACOSX_DEPLOYMENT_TARGET="$(sw_vers -productVersion)"' : '';
+    $customEnvEnd = $p->isMacos() ? 'unset MACOSX_DEPLOYMENT_TARGET' : '';
+
+    $p->addLibrary(
+        (new Library('pgsql'))
+            ->withHomePage('https://www.postgresql.org/')
+            ->withLicense('https://www.postgresql.org/about/licence/', Library::LICENSE_SPEC)
+            ->withUrl('https://ftp.postgresql.org/pub/source/v16.3/postgresql-16.3.tar.gz')
+            ->withFileHash('md5', '8a58db4009e1a50106c5e1a8c4b03bed')
+            ->withPrefix($pgsqlPrefix)
+            ->withBuildScript(
+                <<<EOF
+            {$customEnvStart}
+            test -d build && rm -rf build
+            mkdir -p build
+            cd build
+            ../configure --help
+            sed -i.backup "s/invokes exit\\'; exit 1;/invokes exit\\';/" ../src/interfaces/libpq/Makefile
+            CPPFLAGS="\$(pkg-config --cflags-only-I --static openssl zlib)" \\
+            LDFLAGS="\$(pkg-config --libs-only-L --static openssl zlib) {$ldflags}" \\
+            LIBS="\$(pkg-config --libs-only-l --static openssl zlib) {$libs}" \\
+            ../configure \\
+            --prefix={$pgsqlPrefix} \\
+            --enable-coverage=no \\
+            --disable-thread-safety \\
+            --with-ssl=openssl \\
+            --without-readline \\
+            --without-icu \\
+            --without-libxml \\
+            --without-libxslt \\
+            --without-lz4 \\
+            --without-zstd \\
+            --without-gssapi \\
+            --without-perl \\
+            --without-python \\
+            --without-pam \\
+            --without-ldap \\
+            --without-bonjour \\
+            --without-tcl
+            make -C src/bin/pg_config install
+            make -C src/include install
+            make -C src/common install
+            make -C src/port install
+            make -C src/interfaces/libpq install
+            {$customEnvEnd}
+EOF
+            )
+            ->withScriptAfterInstall(<<<EOF
+            rm -rf {$pgsqlPrefix}/lib/*.so.*
+            rm -rf {$pgsqlPrefix}/lib/*.so
+            rm -rf {$pgsqlPrefix}/lib/*.dylib
+EOF
+            )
+            ->withPkgName('libpq')
+            ->withBinPath($pgsqlPrefix . '/bin/')
+            ->withDependentLibraries('zlib', 'openssl')
+    );
+    $p->withExportVariable('LIBPQ_CFLAGS', '$(pkg-config --cflags --static libpq)');
+    $p->withExportVariable('LIBPQ_LIBS', '$(pkg-config --libs --static libpq)');
+};
+PHP
+  echo "Applied PDO-only PostgreSQL client builder" >&2
+
   if [[ "${PHPSFX_SWOOLE_SLIM_EXTENSION:-0}" == "1" ]]; then
     swoole_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/swoole.php"
     cat > "${swoole_file}" <<'PHP'
@@ -483,8 +774,9 @@ use SwooleCli\Preprocessor;
 return function (Preprocessor $p) {
     // HyperfAdmin slim profile:
     // 保留 Swoole HTTP/TCP/WebSocket server、coroutine、mysqlnd、curl hook 和 c-ares DNS 能力；
-    // SQLite 仅启用 PHP 标准 sqlite3/pdo_sqlite，不启用 Swoole 的 sqlite 协程 hook。
-    // 默认不启用 pgsql/ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
+    // SQLite and PostgreSQL are exposed through PHP PDO only; do not enable
+    // Swoole's SQLite hook or the native pgsql extension.
+    // 默认不启用 ssh2/ftp/thread/brotli/zstd 等业务未使用功能，减少依赖库和二进制体积。
     // ODBC profile 通过系统 unixODBC 动态启用 Swoole 的协程 PDO ODBC 驱动。
     $dependentLibraries = ['curl', 'openssl', 'cares', 'zlib'];
     $dependentExtensions = ['curl', 'openssl', 'sockets', 'mysqlnd', 'pdo'];
@@ -695,8 +987,9 @@ return function (Preprocessor $p) {
     $p->addExtension(
         (new Extension('redis'))
             ->withOptions('--enable-redis --disable-redis-session')
-            ->withPeclVersion('6.2.0')
-            ->withFileHash('md5', 'b713b42a7ad2eb6638de739fffd62c3a')
+            // phpredis 6.3.0 uses Zend's PHP 8.5-compatible smart-string header.
+            ->withPeclVersion('6.3.0')
+            ->withFileHash('md5', 'ac080d0329813bb1291d0697c6f539c4')
             ->withHomePage('https://github.com/phpredis/phpredis')
             ->withLicense('https://github.com/phpredis/phpredis/blob/develop/COPYING', Extension::LICENSE_PHP)
     );
@@ -734,6 +1027,25 @@ return function (Preprocessor $p) {
 PHP
     echo "Applied oniguruma clang compatibility profile" >&2
   fi
+}
+
+create_configure_php_wrapper() {
+  local host_php wrapper_file
+  host_php=$(command -v php)
+  wrapper_file="${SWOOLE_CLI_DIR}/.host-php-for-configure"
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    printf '%s\n' 'set -Eeuo pipefail'
+    printf 'HOST_PHP=%q\n' "${host_php}"
+    cat <<'WRAPPER'
+if [[ "${1:-}" == "-v" ]]; then
+    exec "${HOST_PHP}" -r 'printf("PHP %s (cli)\n", PHP_VERSION);'
+fi
+exec "${HOST_PHP}" "$@"
+WRAPPER
+  } > "${wrapper_file}"
+  chmod +x "${wrapper_file}"
+  CONFIGURE_PHP_WRAPPER=${wrapper_file}
 }
 
 if [[ -z "${PLATFORM}" ]]; then
@@ -792,8 +1104,13 @@ else
 fi
 assert_target_php_version
 sync_php_source
+patch_php85_opcache_registration
+patch_php85_opcache_module_stub
+prime_php85_core_extensions
 prime_swoole_extension_archive
+patch_swoole_623_php85_compat
 prime_pdo_sqlite_extension_source
+prime_pdo_pgsql_extension_source
 if [[ "${SWOOLE_ODBC_ENABLED}" == "1" ]]; then
   patch_swoole_odbc_configure_probe
 fi
@@ -813,9 +1130,10 @@ php prepare.php --without-docker=1 --with-parallel-jobs="${JOBS}" --with-global-
 if [[ "${SWOOLE_ODBC_ENABLED}" == "1" && "${PLATFORM}" == linux-* ]]; then
   enable_dynamic_odbc_linking
 fi
+create_configure_php_wrapper
 
 bash ./make.sh all-library
-bash ./make.sh config
+PHP="${CONFIGURE_PHP_WRAPPER}" bash ./make.sh config
 bash ./make.sh build
 
 SWOOLE_CLI_BIN="${SWOOLE_CLI_DIR}/bin/swoole-cli"
@@ -863,6 +1181,7 @@ PHPSFX_EXPECTED_PHP_VERSION="${EXPECTED_PHP_FULL_VERSION}" \
 PHPSFX_EXPECTED_SWOOLE_VERSION="${EXPECTED_SWOOLE_VERSION}" \
 PHPSFX_REQUIRED_EXTENSIONS="${EXPECTED_EXTENSIONS}" \
 PHPSFX_FORBIDDEN_EXTENSIONS="${FORBIDDEN_EXTENSIONS}" \
+PHPSFX_REQUIRED_PDO_DRIVERS="${REQUIRED_PDO_DRIVERS}" \
 PHPSFX_EXPECT_SWOOLE_ODBC="${SWOOLE_ODBC_ENABLED}" \
   bash "${ROOT_DIR}/scripts/validate-swoole-cli.sh" "${DIST_DIR}/${ASSET_NAME}"
 
@@ -881,11 +1200,13 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}${ASSET_SUFFIX_PART}.json" <<META
   "variant": "${PLATFORM}${ASSET_SUFFIX_PART}",
   "asset": "${ASSET_NAME}",
   "profile": "${PROFILE_NAME}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.0}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",
   "extensions": "${PHPSFX_EXTENSIONS:-${DEFAULT_EXTENSIONS}}",
   "required_extensions": "${EXPECTED_EXTENSIONS}",
+  "required_pdo_drivers": "${REQUIRED_PDO_DRIVERS}",
   "forbidden_extensions": "${FORBIDDEN_EXTENSIONS}",
   "prepare_enabled_extensions": "${PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS:-}",
   "swoole_slim_extension": "${PHPSFX_SWOOLE_SLIM_EXTENSION:-0}",
@@ -901,6 +1222,7 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}${ASSET_SUFFIX_PART}.json" <<META
   "swoole_cli_ref": "${SWOOLE_CLI_REF}",
   "swoole_src_ref": "${SWOOLE_SRC_REF}",
   "swoole_cli_commit": "${SWOOLE_CLI_COMMIT}",
+  "upstream_baseline_commit": "${SWOOLE_CLI_REF}",
   "prepare_flags": "${PREPARE_FLAGS}",
   "global_prefix": "${GLOBAL_PREFIX}",
   "sha256": "${SHA256}",

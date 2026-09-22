@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release or workflow artifact version, for example v0.1.0'
+        description: 'Self-maintained swoole-cli release or workflow artifact version'
         required: true
-        default: 'v0.1.0'
+        default: 'v6.2.3.0'
         type: string
       publish:
         description: 'Create a GitHub Release after all builds and checks pass'
@@ -19,17 +19,22 @@ on:
       php_version:
         description: 'PHP version line'
         required: true
-        default: '8.4'
+        default: '8.5'
+        type: string
+      php_full_version:
+        description: 'Exact PHP source/runtime version'
+        required: true
+        default: '8.5.9'
         type: string
       swoole_cli_ref:
-        description: 'swoole-cli branch, tag, or commit'
+        description: 'Pinned official swoole-cli baseline commit'
         required: true
-        default: 'v6.2.2.0'
+        default: 'f7903840c3e959612dac7d413205e1bdb0067029'
         type: string
       swoole_src_ref:
         description: 'swoole-src branch, tag, or commit'
         required: true
-        default: 'v6.2.2'
+        default: 'v6.2.3'
         type: string
       prepare_flags:
         description: 'Optional prepare.php flags. Leave empty to use repository defaults.'
@@ -116,14 +121,15 @@ jobs:
       PHPSFX_PLATFORM: ${{ matrix.platform }}
       PHPSFX_PROFILE_FILE: ${{ matrix.profile }}
       PHPSFX_ASSET_SUFFIX: ${{ matrix.asset_suffix }}
-      PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.4' }}
-      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.2.0' }}
-      PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.2' }}
+      PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.5' }}
+      PHPSFX_PHP_FULL_VERSION: ${{ github.event.inputs.php_full_version || '8.5.9' }}
+      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'f7903840c3e959612dac7d413205e1bdb0067029' }}
+      PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.3' }}
       PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/${{ matrix.variant }}
       PHPSFX_BUILD_JOBS: 2
 
     steps:
-      - name: Checkout phpsfx
+      - name: Checkout self-maintained swoole-cli
         uses: actions/checkout@v4
 
       - name: Install Linux build dependencies
@@ -170,7 +176,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ github.event.inputs.php_version || '8.4' }}
+          php-version: ${{ github.event.inputs.php_version || '8.5' }}
           tools: composer:v2
           coverage: none
           extensions: curl, openssl, mbstring, phar, zip
@@ -268,12 +274,13 @@ jobs:
     needs: build
     env:
       PHPSFX_RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
-      PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.4' }}
-      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'v6.2.2.0' }}
-      PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.2' }}
+      PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.5' }}
+      PHPSFX_PHP_FULL_VERSION: ${{ github.event.inputs.php_full_version || '8.5.9' }}
+      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'f7903840c3e959612dac7d413205e1bdb0067029' }}
+      PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.3' }}
       PHPSFX_SWOOLE_CLI_PREPARE_FLAGS: ${{ github.event.inputs.prepare_flags }}
     steps:
-      - name: Checkout phpsfx
+      - name: Checkout self-maintained swoole-cli
         uses: actions/checkout@v4
 
       - name: Download platform artifacts
@@ -308,7 +315,7 @@ jobs:
             test -s "${odbc_meta}"
             grep -F "  ${default_asset}" SHA256SUMS
             grep -F "  ${odbc_asset}" SHA256SUMS
-            jq -e '.profile == "slim" and .swoole_odbc == false and .odbc_dynamic_dependency == ""' \
+            jq -e '.profile == "hyperfadmin-slim" and .swoole_odbc == false and .odbc_dynamic_dependency == ""' \
               "${default_meta}"
             jq -e --arg dependency "${odbc_dependency}" \
               '.profile == "hyperfadmin-odbc" and .swoole_odbc == true and .odbc_dynamic_dependency == $dependency' \
@@ -334,12 +341,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.PHPSFX_RELEASE_VERSION }}
-          name: phpsfx ${{ env.PHPSFX_RELEASE_VERSION }}
+          name: swoole-cli ${{ env.PHPSFX_RELEASE_VERSION }}
           target_commitish: ${{ github.sha }}
           draft: false
           prerelease: false
           body: |
-            Swoole CLI PHP ${{ env.PHPSFX_PHP_VERSION }} slim runtime with Swoole ${{ env.PHPSFX_SWOOLE_SRC_REF }}.
+            Self-maintained swoole-cli ${{ env.PHPSFX_RELEASE_VERSION }} with PHP ${{ env.PHPSFX_PHP_FULL_VERSION }} and Swoole ${{ env.PHPSFX_SWOOLE_SRC_REF }}.
 
             This release uses the slim profile and Swoole CLI SFX format:
 
@@ -347,7 +354,7 @@ jobs:
 
             Run packed applications with `--self`, for example `./app --self list`.
 
-            The four default assets include native MySQL and SQLite support without an ODBC runtime
+            The four default assets include PDO MySQL, PostgreSQL, and SQLite support without an ODBC runtime
             dependency. The optional `*-odbc` assets add PDO ODBC and Swoole coroutine ODBC support;
             they require the system unixODBC runtime plus a separately installed vendor driver matching
             the target platform and architecture. Vendor drivers and credentials are not bundled.

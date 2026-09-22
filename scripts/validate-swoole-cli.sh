@@ -15,14 +15,23 @@ fi
 
 chmod +x "${SWOOLE_CLI}"
 "${SWOOLE_CLI}" -r '
-$expectedPrefix = getenv("PHPSFX_EXPECTED_PHP_PREFIX") ?: "8.4.";
+$expectedPrefix = getenv("PHPSFX_EXPECTED_PHP_PREFIX") ?: "8.5.";
 $expectedVersion = trim(getenv("PHPSFX_EXPECTED_PHP_VERSION") ?: "");
 $expectedSwooleVersion = ltrim(trim(getenv("PHPSFX_EXPECTED_SWOOLE_VERSION") ?: ""), "vV");
 $required = array_values(array_filter(array_map("trim", explode(",", getenv("PHPSFX_REQUIRED_EXTENSIONS") ?: ""))));
 $forbidden = array_values(array_filter(array_map("trim", explode(",", getenv("PHPSFX_FORBIDDEN_EXTENSIONS") ?: ""))));
+$requiredPdoDrivers = array_values(array_filter(array_map("trim", explode(",", getenv("PHPSFX_REQUIRED_PDO_DRIVERS") ?: "mysql,pgsql,sqlite"))));
 $allowExtra = filter_var(getenv("PHPSFX_ALLOW_EXTRA_EXTENSIONS") ?: "0", FILTER_VALIDATE_BOOL);
 $expectSwooleOdbc = (getenv("PHPSFX_EXPECT_SWOOLE_ODBC") ?: "0") === "1";
 $errors = [];
+
+$isExtensionLoaded = static function (string $extension): bool {
+    if (extension_loaded($extension)) {
+        return true;
+    }
+    // PHP 8.5 reports the built-in Zend extension under its canonical name.
+    return strtolower($extension) === "opcache" && extension_loaded("Zend OPcache");
+};
 
 if (!str_starts_with(PHP_VERSION, $expectedPrefix)) {
     $errors[] = sprintf("PHP_VERSION %s does not start with %s", PHP_VERSION, $expectedPrefix);
@@ -41,7 +50,7 @@ if (!defined("SWOOLE_CLI")) {
 
 $missing = [];
 foreach ($required as $extension) {
-    if (!extension_loaded($extension)) {
+    if (!$isExtensionLoaded($extension)) {
         $missing[] = $extension;
     }
 }
@@ -52,7 +61,7 @@ if ($missing !== []) {
 $unexpected = [];
 if (!$allowExtra) {
     foreach ($forbidden as $extension) {
-        if (extension_loaded($extension)) {
+        if ($isExtensionLoaded($extension)) {
             $unexpected[] = $extension;
         }
     }
@@ -71,6 +80,10 @@ ob_start();
 phpinfo(INFO_MODULES);
 $moduleInfo = (string) ob_get_clean();
 $pdoDrivers = class_exists("PDO") ? PDO::getAvailableDrivers() : [];
+$missingPdoDrivers = array_values(array_diff($requiredPdoDrivers, $pdoDrivers));
+if ($missingPdoDrivers !== []) {
+    $errors[] = "Missing PDO drivers: " . implode(", ", $missingPdoDrivers);
+}
 $odbcHook = defined("SWOOLE_HOOK_PDO_ODBC") ? constant("SWOOLE_HOOK_PDO_ODBC") : 0;
 $allHooks = defined("SWOOLE_HOOK_ALL") ? constant("SWOOLE_HOOK_ALL") : 0;
 $odbcSmoke = [
@@ -90,32 +103,9 @@ if ($expectSwooleOdbc) {
 }
 
 $sqliteSmoke = [
-    "sqlite3_class" => class_exists("SQLite3"),
-    "sqlite3_memory" => null,
     "pdo_sqlite_driver" => class_exists("PDO") ? in_array("sqlite", PDO::getAvailableDrivers(), true) : false,
     "pdo_sqlite_memory" => null,
 ];
-
-if (in_array("sqlite3", $required, true)) {
-    if (!class_exists("SQLite3")) {
-        $errors[] = "SQLite3 class is not available";
-    } else {
-        try {
-            $db = new SQLite3(":memory:");
-            $db->exec("CREATE TABLE phpsfx_sqlite3_check (id INTEGER PRIMARY KEY, name TEXT NOT NULL)");
-            $db->exec("INSERT INTO phpsfx_sqlite3_check (name) VALUES (\"ok\")");
-            $value = $db->querySingle("SELECT name FROM phpsfx_sqlite3_check WHERE id = 1");
-            $db->close();
-            $sqliteSmoke["sqlite3_memory"] = ($value === "ok");
-            if ($value !== "ok") {
-                $errors[] = "SQLite3 memory smoke check returned unexpected value";
-            }
-        } catch (Throwable $e) {
-            $sqliteSmoke["sqlite3_memory"] = false;
-            $errors[] = "SQLite3 memory smoke check failed: " . $e->getMessage();
-        }
-    }
-}
 
 if (in_array("pdo_sqlite", $required, true)) {
     if (!class_exists("PDO")) {
@@ -149,6 +139,8 @@ $result = [
     "expected_swoole_version" => $expectedSwooleVersion !== "" ? $expectedSwooleVersion : null,
     "required_extensions" => $required,
     "forbidden_extensions" => $forbidden,
+    "pdo_drivers" => $pdoDrivers,
+    "required_pdo_drivers" => $requiredPdoDrivers,
     "allow_extra_extensions" => $allowExtra,
     "odbc" => $odbcSmoke,
     "sqlite_smoke" => $sqliteSmoke,

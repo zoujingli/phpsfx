@@ -2,8 +2,8 @@
 
 本文说明如何使用 `phpsfx` Linux ODBC 可选运行时连接和验收达梦数据库。适用于：
 
-- `swoole-cli-php8.4-linux-x64-odbc`
-- `swoole-cli-php8.4-linux-a64-odbc`
+- `swoole-cli-php8.5-linux-x64-odbc`
+- `swoole-cli-php8.5-linux-a64-odbc`
 
 运行时只提供 PHP PDO ODBC 和 Swoole 协程 ODBC 能力。它不包含达梦客户端、许可证、数据库配置、DSN、账号或密码，也不证明智慧厨房业务 SQL、分页、迁移和 MySQL 方言已经兼容达梦。unixODBC 基础环境和其它厂商配置见 [ODBC 环境与常见数据库接入](odbc-runtime.md)。
 
@@ -47,8 +47,8 @@ uname -m
 
 ```bash
 getconf GNU_LIBC_VERSION
-file ./swoole-cli-php8.4-linux-a64-odbc
-ldd ./swoole-cli-php8.4-linux-a64-odbc
+file ./swoole-cli-php8.5-linux-a64-odbc
+ldd ./swoole-cli-php8.5-linux-a64-odbc
 ```
 
 如果出现 `GLIBC_x.y not found`，应在与目标系统 ABI 兼容的构建环境重新源码构建，不要通过替换系统 glibc 处理。
@@ -72,7 +72,7 @@ sudo apt-get install -y ca-certificates curl file unixodbc binutils netcat-openb
 sudo apt-get install -y unixodbc-dev
 ```
 
-全新 Ubuntu 构建机还必须安装 PHP 8.4 CLI、Composer 2，以及 `.github/workflows/release.yml` 中列出的编译工具链。仅安装 `unixodbc-dev` 不能完成源码构建。
+全新 Ubuntu 构建机还必须安装 PHP 8.5 CLI、Composer 2，以及 `.github/workflows/release.yml` 中列出的编译工具链。仅安装 `unixodbc-dev` 不能完成源码构建。
 
 ### RHEL / Rocky Linux / 麒麟常见仓库
 
@@ -109,7 +109,7 @@ command -v git make tar readelf
 test -f scripts/profiles/hyperfadmin-odbc.env
 ```
 
-系统 PHP 必须是 8.4，unixODBC 头文件默认必须位于 `/usr/include/sql.h` 和 `/usr/include/sqlext.h`。如果开发包安装在其它前缀，可通过 `PHPSFX_SWOOLE_ODBC_PREFIX` 指定绝对路径。
+系统 PHP 必须是 8.5，构建目标 PHP release 为 8.5.9；unixODBC 头文件默认必须位于 `/usr/include/sql.h` 和 `/usr/include/sqlext.h`。如果开发包安装在其它前缀，可通过 `PHPSFX_SWOOLE_ODBC_PREFIX` 指定绝对路径。
 
 x86_64 构建机执行：
 
@@ -128,10 +128,10 @@ PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
 成功后输出分别为：
 
 ```text
-dist/swoole-cli-php8.4-linux-x64-odbc
+dist/swoole-cli-php8.5-linux-x64-odbc
 dist/build-meta-linux-x64-odbc.json
 
-dist/swoole-cli-php8.4-linux-a64-odbc
+dist/swoole-cli-php8.5-linux-a64-odbc
 dist/build-meta-linux-a64-odbc.json
 ```
 
@@ -167,11 +167,11 @@ LD_LIBRARY_PATH="$DM_HOME/bin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 
 下载脚本的第三个参数是最终输出文件名。为了能直接使用 Release 的 `SHA256SUMS`，必须先保留 Release 原文件名完成校验，再安装为服务使用的短文件名。
 
-以下示例用于 ARM64；x86_64 只需把前两行的平台和文件名改为 `linux-x64-odbc` 和 `swoole-cli-php8.4-linux-x64-odbc`：
+以下示例用于 ARM64；x86_64 只需把前两行的平台和文件名改为 `linux-x64-odbc` 和 `swoole-cli-php8.5-linux-x64-odbc`：
 
 ```bash
 PHPSFX_RELEASE_PLATFORM=linux-a64-odbc
-PHPSFX_RELEASE_ASSET=swoole-cli-php8.4-linux-a64-odbc
+PHPSFX_RELEASE_ASSET=swoole-cli-php8.5-linux-a64-odbc
 PHPSFX_RELEASE_STAGE=$(mktemp -d)
 
 bash scripts/download-release-asset.sh \

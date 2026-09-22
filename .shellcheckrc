@@ -1,0 +1,3 @@
+# PHP snippets intentionally use single-quoted shell strings so PHP variables
+# are expanded by PHP rather than by the invoking shell.
+disable=SC2016,SC2026
