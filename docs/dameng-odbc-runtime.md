@@ -5,7 +5,7 @@
 - `swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite-odbc`
 - `swoole-cli-php8.5-linux-a64-mysql-pgsql-sqlite-odbc`
 
-上面使用三数据库全量组合；只需要部分 PDO 驱动时，可以改用相同平台的 `pgsql-sqlite-odbc` 或 `mysql-sqlite-odbc` 产物，达梦 ODBC 能力相同。
+上面使用三数据库全量组合；只需要部分 PDO 驱动时，可以改用相同平台的 `sqlite`、`mysql`、`pgsql`、`mysql-pgsql`、`pgsql-sqlite` 或 `mysql-sqlite` 组合的 `-odbc` 产物，达梦 ODBC 能力相同。无 SQLite 的组合不内置 `pdo_sqlite` 或 SQLite 客户端库；达梦 ODBC 连接不要求它们。
 
 运行时只提供 PHP PDO ODBC 和 Swoole 协程 ODBC 能力。它不包含达梦客户端、许可证、数据库配置、DSN、账号或密码，也不证明智慧厨房业务 SQL、分页、迁移和 MySQL 方言已经兼容达梦。unixODBC 基础环境和其它厂商配置见 [ODBC 环境与常见数据库接入](odbc-runtime.md)。
 

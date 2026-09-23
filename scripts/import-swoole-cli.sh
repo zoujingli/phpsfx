@@ -130,7 +130,7 @@ cat > "${DIST_DIR}/build-meta-${VARIANT}.json" <<META
   "asset": "${ASSET_NAME}",
   "profile": "${PROFILE_NAME}",
   "database_variant": "${DB_VARIANT}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.1}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.2}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",

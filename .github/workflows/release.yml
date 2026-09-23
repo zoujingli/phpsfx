@@ -9,7 +9,7 @@ on:
       version:
         description: 'Self-maintained swoole-cli release or workflow artifact version'
         required: true
-        default: 'v6.2.3.1'
+        default: 'v6.2.3.2'
         type: string
       publish:
         description: 'Create a GitHub Release after all builds and checks pass'
@@ -65,7 +65,7 @@ jobs:
           - { name: linux-a64, runner: ubuntu-24.04-arm }
           - { name: macos-x64, runner: macos-15-intel }
           - { name: macos-a64, runner: macos-15 }
-        database: [pgsql-sqlite, mysql-sqlite, mysql-pgsql-sqlite]
+        database: [sqlite, mysql, pgsql, mysql-pgsql, pgsql-sqlite, mysql-sqlite, mysql-pgsql-sqlite]
         odbc: [false, true]
     env:
       PHPSFX_VARIANT: ${{ format('{0}-{1}{2}', matrix.platform.name, matrix.database, matrix.odbc && '-odbc' || '') }}
@@ -255,14 +255,15 @@ jobs:
           sha256sum swoole-cli-php"${PHPSFX_PHP_VERSION}"-* > SHA256SUMS
           cat SHA256SUMS
           test -s build-meta.json
-          test "$(find . -maxdepth 1 -type f -name 'swoole-cli-php*' | wc -l | tr -d ' ')" -eq 24
-          test "$(find . -maxdepth 1 -type f -name 'build-meta-*.json' | wc -l | tr -d ' ')" -eq 24
-          test "$(wc -l < SHA256SUMS | tr -d ' ')" -eq 24
+          test "$(find . -maxdepth 1 -type f -name 'swoole-cli-php*' | wc -l | tr -d ' ')" -eq 56
+          test "$(find . -maxdepth 1 -type f -name 'build-meta-*.json' | wc -l | tr -d ' ')" -eq 56
+          test "$(wc -l < SHA256SUMS | tr -d ' ')" -eq 56
           sha256sum -c SHA256SUMS
           jq -e --arg version "${PHPSFX_RELEASE_VERSION}" '
-            .version == $version and (.platforms | length == 24) and
-            (.platforms | map(.variant) | unique | length == 24) and
-            (.platforms | map(.asset) | unique | length == 24) and
+            .version == $version and (.platforms | length == 56) and
+            (.platforms | map(.variant) | unique | length == 56) and
+            (.platforms | map(.asset) | unique | length == 56) and
+            (.database_variants | sort == ["mysql", "mysql-pgsql", "mysql-pgsql-sqlite", "mysql-sqlite", "pgsql", "pgsql-sqlite", "sqlite"]) and
             (.cli_versions == [$version])
           ' build-meta.json
           for platform in linux-x64 linux-a64 macos-x64 macos-a64; do
@@ -270,11 +271,15 @@ jobs:
               linux-*) odbc_dependency=libodbc.so.2 ;;
               macos-*) odbc_dependency=libodbc.2.dylib ;;
             esac
-            for database in pgsql-sqlite mysql-sqlite mysql-pgsql-sqlite; do
+            for database in sqlite mysql pgsql mysql-pgsql pgsql-sqlite mysql-sqlite mysql-pgsql-sqlite; do
               case "${database}" in
-                pgsql-sqlite) drivers=pgsql,sqlite ;;
-                mysql-sqlite) drivers=mysql,sqlite ;;
-                mysql-pgsql-sqlite) drivers=mysql,pgsql,sqlite ;;
+                sqlite) drivers=sqlite; forbidden=pdo_mysql,pdo_pgsql ;;
+                mysql) drivers=mysql; forbidden=pdo_pgsql,pdo_sqlite ;;
+                pgsql) drivers=pgsql; forbidden=pdo_mysql,pdo_sqlite ;;
+                mysql-pgsql) drivers=mysql,pgsql; forbidden=pdo_sqlite ;;
+                pgsql-sqlite) drivers=pgsql,sqlite; forbidden=pdo_mysql ;;
+                mysql-sqlite) drivers=mysql,sqlite; forbidden=pdo_pgsql ;;
+                mysql-pgsql-sqlite) drivers=mysql,pgsql,sqlite; forbidden= ;;
               esac
               for odbc in false true; do
                 suffix=
@@ -296,12 +301,16 @@ jobs:
                 jq -e --arg platform "${platform}" --arg variant "${variant}" \
                   --arg asset "${asset}" --arg database "${database}" \
                   --arg profile "${profile}" --arg drivers "${expected_drivers}" \
+                  --arg forbidden "${forbidden}" \
                   --arg dependency "${dependency}" --arg version "${PHPSFX_RELEASE_VERSION}" \
                   --arg sha "$(sha256sum "${asset}" | cut -d ' ' -f 1)" \
                   '.platform == $platform and .variant == $variant and .asset == $asset and
                    .database_variant == $database and .profile == $profile and
                    .required_pdo_drivers == $drivers and .odbc_dynamic_dependency == $dependency and
-                   .swoole_odbc == ($dependency != "") and .cli_version == $version and .sha256 == $sha' \
+                   .swoole_odbc == ($dependency != "") and .cli_version == $version and .sha256 == $sha and
+                   ((.forbidden_extensions | split(",")) as $excluded |
+                    ($excluded | index("mysqli") != null and index("pgsql") != null and index("sqlite3") != null) and
+                    (if $forbidden == "" then true else (($forbidden | split(",")) - $excluded | length == 0) end))' \
                   "${meta}"
                 jq -e --arg variant "${variant}" --slurpfile metadata "${meta}" \
                   '.platforms | any(.variant == $variant and . == $metadata[0])' build-meta.json
@@ -339,9 +348,10 @@ jobs:
 
             Run packed applications with `--self`, for example `./app --self list`.
 
-            The four platforms each provide three PDO-only combinations: `pgsql-sqlite`,
-            `mysql-sqlite`, and `mysql-pgsql-sqlite`. Each combination also has a `-odbc` variant,
-            for 24 binaries in total. ODBC variants add PDO ODBC and Swoole coroutine ODBC;
+            The four platforms each provide seven PDO-only combinations: `sqlite`, `mysql`,
+            `pgsql`, `mysql-pgsql`, `pgsql-sqlite`, `mysql-sqlite`, and `mysql-pgsql-sqlite`.
+            Each combination also has a `-odbc` variant, for 56 binaries and 114 Release assets.
+            ODBC variants add PDO ODBC and Swoole coroutine ODBC;
             they require the system unixODBC runtime plus a separately installed vendor driver
             matching the platform and architecture. Vendor drivers and credentials are not bundled.
           files: |
@@ -349,3 +359,7 @@ jobs:
             dist/build-meta-*.json
             dist/SHA256SUMS
             dist/build-meta.json
+
+      - name: Verify published Release assets
+        if: github.event_name == 'push' || inputs.publish
+        run: python3 scripts/verify-release-assets.py "${{ github.repository }}" "${PHPSFX_RELEASE_VERSION}" dist

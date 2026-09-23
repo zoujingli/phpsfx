@@ -2,14 +2,14 @@
 
 本文说明 `phpsfx` 通用 ODBC 运行时的选择、安装、配置、开发和验收方法，覆盖常见国际数据库以及达梦、人大金仓、openGauss/GaussDB、OceanBase、GBase、神通、瀚高、Vastbase、TiDB、GoldenDB 等国产数据库接入路线。
 
-适用 Release 文件（以下为三数据库全量组合，其余组合把 `mysql-pgsql-sqlite` 换成 `mysql-sqlite` 或 `pgsql-sqlite`）：
+适用 Release 文件（以下为三数据库全量组合，其余组合把 `mysql-pgsql-sqlite` 换成 `sqlite`、`mysql`、`pgsql`、`mysql-pgsql`、`mysql-sqlite` 或 `pgsql-sqlite`）：
 
 - `swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite-odbc`
 - `swoole-cli-php8.5-linux-a64-mysql-pgsql-sqlite-odbc`
 - `swoole-cli-php8.5-macos-x64-mysql-pgsql-sqlite-odbc`
 - `swoole-cli-php8.5-macos-a64-mysql-pgsql-sqlite-odbc`
 
-不使用 ODBC 时请选择不带 `-odbc` 的对应组合产物。数据库组合仅加载选定的 PDO 驱动，不加载 PHP `mysqli`、原生 `pgsql` 或 `SQLite3` 扩展，进程启动不依赖 unixODBC。
+不使用 ODBC 时请选择不带 `-odbc` 的对应组合产物。数据库组合仅加载选定的 PDO 驱动；无 SQLite 的产物不含 `pdo_sqlite` 及其 SQLite 客户端库。不加载 PHP `mysqli`、原生 `pgsql` 或 `SQLite3` 扩展，普通版进程启动不依赖 unixODBC。
 
 ## 1. 能力与责任边界
 
@@ -36,7 +36,7 @@ Release 不包含：
 | unixODBC Driver Manager | `-odbc` 进程启动时 | 部署系统或 Homebrew |
 | 数据库厂商 ODBC 驱动 | 实际连接对应数据库时 | 数据库厂商或操作系统仓库 |
 
-因此，厂商驱动是按数据库可选的，但 unixODBC 对 `-odbc` 产物不是延迟依赖。只使用 MySQL/SQLite 且不希望安装 unixODBC 时，应下载 `mysql-sqlite` 普通版。
+因此，厂商驱动是按数据库可选的，但 unixODBC 对 `-odbc` 产物不是延迟依赖。只使用 MySQL 且不希望安装 unixODBC 时，可下载 `mysql` 普通版；需要 SQLite 时选择 `mysql-sqlite`。
 
 ## 2. 选择平台和架构
 
@@ -195,7 +195,7 @@ odbc:<odbc.ini 节名>
 | 数据库 | 优先接入路线 | ODBC 驱动来源 | 关键确认项 |
 |--------|--------------|---------------|------------|
 | MySQL / MariaDB | 优先内置 `pdo_mysql`；需要统一 ODBC 时再使用 Connector/ODBC | MySQL 或 MariaDB 官方 | TLS、字符集、认证插件 |
-| SQLite | 优先内置 `pdo_sqlite`；ODBC 主要用于链路测试 | 系统仓库或 Homebrew `sqliteodbc` | 文件与目录写权限、WAL |
+| SQLite | 含 SQLite 的组合优先内置 `pdo_sqlite`；ODBC 可在无 SQLite 组合中通过外部驱动使用 | 系统仓库或 Homebrew `sqliteodbc` | 文件与目录写权限、WAL |
 | PostgreSQL | psqlODBC | PostgreSQL 社区或系统仓库 | TLS、Unicode 驱动、时区 |
 | Microsoft SQL Server | Microsoft ODBC Driver 18 | 微软官方 | TLS CA、加密、认证方式 |
 | Oracle Database | Oracle Instant Client Basic + ODBC | Oracle 官方 | 客户端版本、服务名、Wallet/TNS |
@@ -217,7 +217,7 @@ odbc:<odbc.ini 节名>
 
 ### MySQL / MariaDB
 
-优先使用 `mysql-sqlite` 或 `mysql-pgsql-sqlite` 普通版中的 `pdo_mysql`。ODBC 配置示例：
+优先使用含 MySQL 的普通版中的 `pdo_mysql`。ODBC 配置示例：
 
 ```ini
 [MySQL Unicode]

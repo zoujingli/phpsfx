@@ -19,15 +19,19 @@
 
 本地 macOS ARM64 已完成六种组合的完整构建，均通过 PHP 8.5.9、Swoole 6.2.3、精确 PDO 驱动集合、PDO SQLite、PHP/Phar SFX 和 Hyperf 3.2 smoke。三种 ODBC 版另通过 SQLite ODBC 事务、中文和并发查询，动态依赖为 `libodbc.2.dylib`；`mysql-sqlite` 两版的构建日志不含 libpq。四平台结果以 `v6.2.3.1` 发布工作流为准。
 
+## v6.2.3.2 SQLite 独立拆包
+
+继续使用相同的官方基线、PHP 8.5.9 和 Swoole 6.2.3，保留 `v6.2.3.0`、`v6.2.3.1` 的 tag 与 Release。新增 `sqlite`、`mysql`、`pgsql`、`mysql-pgsql` 四种 PDO 组合，原三种含 SQLite 组合不变；四平台各有七种普通版和七种 ODBC 版，共 56 个二进制、56 份平台元数据、汇总元数据与 `SHA256SUMS`，合计 114 个 Release 资产。默认组合与无组合名下载别名仍为 `mysql-pgsql-sqlite`。未选 SQLite 时不补入 `pdo_sqlite` 源码、不注入 builder、不构建 SQLite 客户端库；未选 PostgreSQL 时同样不构建 libpq。ODBC 版通过 CI 单独安装的 SQLite ODBC 驱动验收事务与并发，不依赖该二进制包含 `pdo_sqlite`。本地 macOS ARM64 的 14 个组合均已完整构建，并通过精确 PDO 驱动、未选库构建目标缺席、PHP/Phar SFX 和 Hyperf 3.2 smoke；七个 ODBC 版还通过外部 SQLite ODBC 事务与并发测试。`bash -n`、ShellCheck、actionlint、Composer、Profile/下载测试、发布核验单测和 `git diff --check` 均通过。四平台发布结果以本版本的 Release 元数据和工作流为准。
+
 ## 本地适配
 
 1. `scripts/build-swoole-cli.sh` 将基线的 `sapi/PHP-VERSION.conf` 切换为 `8.5.9`，调用基线的 `sync-source-code.php`，并确认 `main/php_version.h` 报告 `8.5.9`。
-2. PHP 同步后，从 PHP 8.5.9 源码补入 `ext/pdo_sqlite` 和 `ext/pdo_pgsql`。上游同步脚本没有把 `pdo_pgsql` 列入固定扩展清单，因此该步骤由本仓库显式维护。
-3. 构建阶段写入本仓库的 `pdo_sqlite` 和 `pdo_pgsql` builder。`pdo_pgsql` 依赖上游 `sapi/src/builder/library/pgsql.php` 生成的 `libpq`，通过 `LIBPQ_CFLAGS` / `LIBPQ_LIBS` 配置 PHP 的 `--with-pdo-pgsql`。
+2. PHP 同步后，仅对选中的 PDO 驱动从 PHP 8.5.9 源码补入 `ext/pdo_sqlite` 和/或 `ext/pdo_pgsql`。上游同步脚本没有把 `pdo_pgsql` 列入固定扩展清单，因此该步骤由本仓库显式维护。
+3. 构建阶段按组合写入本仓库的 `pdo_sqlite` 和/或 `pdo_pgsql` builder。`pdo_pgsql` 依赖本地精简的 `sapi/src/builder/library/pgsql.php` 生成 `libpq`，通过 `LIBPQ_CFLAGS` / `LIBPQ_LIBS` 配置 PHP 的 `--with-pdo-pgsql`。
 4. Profile 根据数据库组合选择 `pdo_mysql`、`pdo_pgsql`、`pdo_sqlite`，不启用 `mysqli`、原生 `pgsql`、`SQLite3` 或 Swoole SQLite hook。
 5. Swoole builder 保留 server、coroutine、curl hook、mysqlnd、DNS 和 ODBC 能力；ODBC 版的 unixODBC 动态链接和 configure probe 修补仍由当前仓库维护。
 6. phpredis 固定为 6.3.0（PHP 8.5 的 smart-string 头文件已从 `ext/standard` 移至 Zend）；Swoole 6.2.3 的 `sw_usleep` 调用由本地补丁改为标准 C++ 睡眠实现。
-7. `scripts/validate-swoole-cli.sh` 强制检查 PHP 8.5.9、Swoole 6.2.3、所选 PDO driver 集合（含未选驱动缺席）、PDO SQLite 本地读写，以及禁止扩展集合。
+7. `scripts/validate-swoole-cli.sh` 强制检查 PHP 8.5.9、Swoole 6.2.3、所选 PDO driver 集合（含未选驱动缺席）、含 SQLite 包的 PDO SQLite 本地读写，以及禁止扩展集合。
 
 ## 参考官方更新的流程
 
@@ -57,4 +61,4 @@ curl -fsSL https://www.php.net/releases/ | head
 - 本地 builder/profile/patch 的文件和原因；
 - `bash -n`、ShellCheck、actionlint、Composer、`git diff --check` 结果；
 - 至少一个原生构建平台的完整构建、SFX/Phar、PDO 和 Hyperf smoke 结果；
-- 四平台六组合 CI、`build-meta.json`、`SHA256SUMS` 和 24 个 Release 二进制结果。
+- 四平台十四组合 CI、`build-meta.json`、`SHA256SUMS` 和 56 个 Release 二进制、114 个资产的分页核对结果。

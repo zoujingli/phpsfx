@@ -7,9 +7,13 @@ use Hyperf\HttpServer\Router\Router;
 
 Router::get('/health', static function (): string {
     try {
-        $pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-        $pdo->exec('CREATE TABLE smoke (value TEXT NOT NULL)');
-        $pdo->exec("INSERT INTO smoke (value) VALUES ('ok')");
+        $sqliteResult = null;
+        if (in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+            $pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $pdo->exec('CREATE TABLE smoke (value TEXT NOT NULL)');
+            $pdo->exec("INSERT INTO smoke (value) VALUES ('ok')");
+            $sqliteResult = $pdo->query('SELECT value FROM smoke')->fetchColumn();
+        }
 
         $odbcResult = null;
         $odbcDsn = getenv('PHPSFX_ODBC_SMOKE_DSN') ?: '';
@@ -89,7 +93,7 @@ Router::get('/health', static function (): string {
             'status' => 'ok',
             'swoole_version' => SWOOLE_VERSION,
             'coroutine_id' => Coroutine::id(),
-            'pdo_sqlite' => $pdo->query('SELECT value FROM smoke')->fetchColumn(),
+            'pdo_sqlite' => $sqliteResult,
             'pdo_odbc' => $odbcResult,
         ];
     } catch (Throwable $throwable) {

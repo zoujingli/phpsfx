@@ -69,7 +69,7 @@ Important environment variables:
   PHPSFX_FORBIDDEN_EXTENSIONS        Comma-separated extensions that must not be loaded
   PHPSFX_ALLOW_EXTRA_EXTENSIONS      Set to 1 to skip forbidden-extension checks for local full-runtime smoke
   PHPSFX_PROFILE_FILE                Profile env file, default: scripts/profiles/hyperfadmin-slim.env
-  PHPSFX_DB_VARIANT                 PDO combination: pgsql-sqlite, mysql-sqlite, mysql-pgsql-sqlite
+  PHPSFX_DB_VARIANT                 PDO combination: sqlite, mysql, pgsql, mysql-pgsql, pgsql-sqlite, mysql-sqlite, mysql-pgsql-sqlite
   PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS Comma-separated prepare.php default extension list override
   PHPSFX_SWOOLE_SLIM_EXTENSION       Set to 1 to trim optional Swoole extension features, default from profile: 1
   PHPSFX_CURL_SLIM_LIBRARY           Set to 1 to trim optional libcurl features, default from profile: 1
@@ -677,8 +677,9 @@ if (file_put_contents($path, str_replace($search, $replace, $contents)) === fals
 
   # The upstream baseline has no dedicated PDO builders for this profile. Keep
   # database support PDO-only and do not enable Swoole's SQLite coroutine hook.
-  pdo_sqlite_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/pdo_sqlite.php"
-  cat > "${pdo_sqlite_file}" <<'PHP'
+  if [[ " ${PREPARE_FLAGS} " == *" +pdo_sqlite "* ]]; then
+    pdo_sqlite_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/pdo_sqlite.php"
+    cat > "${pdo_sqlite_file}" <<'PHP'
 <?php
 
 use SwooleCli\Extension;
@@ -694,7 +695,8 @@ return function (Preprocessor $p) {
     );
 };
 PHP
-  echo "Applied PDO SQLite extension builder" >&2
+    echo "Applied PDO SQLite extension builder" >&2
+  fi
 
   if [[ " ${PREPARE_FLAGS} " == *" +pdo_pgsql "* ]]; then
   pdo_pgsql_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/pdo_pgsql.php"
@@ -1144,7 +1146,9 @@ patch_php85_opcache_module_stub
 prime_php85_core_extensions
 prime_swoole_extension_archive
 patch_swoole_623_php85_compat
-prime_pdo_sqlite_extension_source
+if [[ " ${PREPARE_FLAGS} " == *" +pdo_sqlite "* ]]; then
+  prime_pdo_sqlite_extension_source
+fi
 if [[ " ${PREPARE_FLAGS} " == *" +pdo_pgsql "* ]]; then
   prime_pdo_pgsql_extension_source
 fi
@@ -1165,6 +1169,19 @@ if [[ -n "${DOWNLOAD_MIRROR_URL}" ]]; then
 fi
 php prepare.php --without-docker=1 --with-parallel-jobs="${JOBS}" --with-global-prefix="${GLOBAL_PREFIX}" "${PREPARE_ARGS[@]}"
 preserve_library_link_order
+for selection in 'pdo_sqlite:sqlite3' 'pdo_pgsql:pgsql'; do
+  extension=${selection%%:*}
+  library=${selection#*:}
+  if [[ " ${PREPARE_FLAGS} " == *" +${extension} "* ]]; then
+    if ! grep -q "^make_${library}()" make.sh; then
+      echo "Selected ${extension} has no ${library} library build target" >&2
+      exit 1
+    fi
+  elif grep -q "^make_${library}()" make.sh; then
+    echo "Unselected ${extension} unexpectedly builds ${library}" >&2
+    exit 1
+  fi
+done
 if [[ "${SWOOLE_ODBC_ENABLED}" == "1" && "${PLATFORM}" == linux-* ]]; then
   enable_dynamic_odbc_linking
 fi
@@ -1239,7 +1256,7 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}${ASSET_SUFFIX_PART}.json" <<META
   "asset": "${ASSET_NAME}",
   "profile": "${PROFILE_NAME}",
   "database_variant": "${DB_VARIANT}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.1}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.2}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",

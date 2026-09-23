@@ -85,10 +85,12 @@ fi
 
 PHPSFX_EXPECTED_SWOOLE_VERSION="${EXPECTED_SWOOLE_VERSION}" \
 PHPSFX_EXPECT_ODBC_SMOKE="${EXPECT_ODBC_SMOKE}" \
+PHPSFX_EXPECT_SQLITE_SMOKE="$([[ "${PHPSFX_DB_VARIANT:-mysql-pgsql-sqlite}" == *sqlite* ]] && printf 1 || printf 0)" \
   "${SWOOLE_CLI}" -r '
 $response = json_decode(file_get_contents($argv[1]), true, flags: JSON_THROW_ON_ERROR);
 $expectedVersion = ltrim(trim(getenv("PHPSFX_EXPECTED_SWOOLE_VERSION") ?: ""), "vV");
 $expectOdbc = (getenv("PHPSFX_EXPECT_ODBC_SMOKE") ?: "0") === "1";
+$expectSqlite = (getenv("PHPSFX_EXPECT_SQLITE_SMOKE") ?: "0") === "1";
 $errors = [];
 if (($response["status"] ?? null) !== "ok") {
     $errors[] = "health status is not ok";
@@ -99,8 +101,12 @@ if ($expectedVersion !== "" && ($response["swoole_version"] ?? null) !== $expect
 if (($response["coroutine_id"] ?? -1) <= 0) {
     $errors[] = "request did not run in a coroutine";
 }
-if (($response["pdo_sqlite"] ?? null) !== "ok") {
-    $errors[] = "PDO SQLite smoke query failed";
+if ($expectSqlite) {
+    if (($response["pdo_sqlite"] ?? null) !== "ok") {
+        $errors[] = "PDO SQLite smoke query failed";
+    }
+} elseif (($response["pdo_sqlite"] ?? null) !== null || in_array("sqlite", PDO::getAvailableDrivers(), true)) {
+    $errors[] = "PDO SQLite is unexpectedly available";
 }
 if ($expectOdbc) {
     $odbc = $response["pdo_odbc"] ?? null;
