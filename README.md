@@ -1,8 +1,8 @@
 # 自维护 Swoole CLI
 
-本仓库是自维护的 `swoole-cli` 发行源码和构建仓库，正式版本为 `v6.2.3.0`。默认构建 PHP `8.5.9` 和 Swoole `6.2.3`，并保留把 PHP 入口或 Phar 追加进运行时的单文件能力。官方仓库只作为固定基线和实现参考；同步记录见 [docs/upstream-sync.md](docs/upstream-sync.md)。
+本仓库是自维护的 `swoole-cli` 发行源码和构建仓库，当前版本为 `v6.2.3.1`。默认构建 PHP `8.5.9` 和 Swoole `6.2.3`，并保留把 PHP 入口或 Phar 追加进运行时的单文件能力。官方仓库只作为固定基线和实现参考；同步记录见 [docs/upstream-sync.md](docs/upstream-sync.md)。
 
-四个平台的默认产物内置 PDO MySQL、PostgreSQL 和 SQLite，不依赖 ODBC 环境；同一 Release 另外提供通用 `-odbc` 产物，增加 PDO ODBC 和 Swoole 协程 ODBC 能力。ODBC 产物动态依赖部署机的 unixODBC，具体数据库的厂商驱动、DSN、客户端依赖和凭据由部署环境提供。
+四个平台分别提供 `pgsql-sqlite`、`mysql-sqlite`、`mysql-pgsql-sqlite` 三种 PDO 组合；每种组合还提供 `-odbc` 版，共 24 个二进制。普通版不依赖 ODBC 环境；ODBC 版增加 PDO ODBC 和 Swoole 协程 ODBC，动态依赖部署机的 unixODBC。厂商驱动、DSN、客户端依赖和凭据由部署环境提供。
 
 运行时使用 Swoole CLI 官方 SFX 格式：
 
@@ -16,18 +16,15 @@ swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 
 ## Release 产物
 
-默认构建 PHP 8.5.9 运行时，覆盖以下平台：
+默认构建 PHP 8.5.9，平台为 `linux-x64`、`linux-a64`、`macos-x64`、`macos-a64`。每个平台提供以下六种后缀：
 
-| 平台 | Release 文件 |
-|------|--------------|
-| Linux x86_64 | `swoole-cli-php8.5-linux-x64` |
-| Linux ARM64 | `swoole-cli-php8.5-linux-a64` |
-| macOS x86_64 | `swoole-cli-php8.5-macos-x64` |
-| macOS ARM64 | `swoole-cli-php8.5-macos-a64` |
-| Linux x86_64 + ODBC | `swoole-cli-php8.5-linux-x64-odbc` |
-| Linux ARM64 + ODBC | `swoole-cli-php8.5-linux-a64-odbc` |
-| macOS x86_64 + ODBC | `swoole-cli-php8.5-macos-x64-odbc` |
-| macOS ARM64 + ODBC | `swoole-cli-php8.5-macos-a64-odbc` |
+| PDO 驱动 | 普通版后缀 | ODBC 版后缀 |
+|------|--------------|----------------|
+| PostgreSQL + SQLite | `-pgsql-sqlite` | `-pgsql-sqlite-odbc` |
+| MySQL + SQLite | `-mysql-sqlite` | `-mysql-sqlite-odbc` |
+| MySQL + PostgreSQL + SQLite | `-mysql-pgsql-sqlite` | `-mysql-pgsql-sqlite-odbc` |
+
+文件名为 `swoole-cli-php8.5-<平台><后缀>`，例如 `swoole-cli-php8.5-linux-x64-pgsql-sqlite-odbc`。`v6.2.3.0` 的旧文件名仍在该历史 Release 中；新版不发布重复的旧文件名。
 
 ODBC 产物不绑定达梦或任何数据库厂商，也不发布厂商专用命名的重复产物。
 
@@ -35,24 +32,17 @@ ODBC 产物不绑定达梦或任何数据库厂商，也不发布厂商专用命
 
 - `SHA256SUMS`
 - `build-meta.json`
-- `build-meta-linux-x64.json`
-- `build-meta-linux-a64.json`
-- `build-meta-macos-x64.json`
-- `build-meta-macos-a64.json`
-- `build-meta-linux-x64-odbc.json`
-- `build-meta-linux-a64-odbc.json`
-- `build-meta-macos-x64-odbc.json`
-- `build-meta-macos-a64-odbc.json`
+- 每个二进制对应的 `build-meta-<平台><后缀>.json`（共 24 个）
 
-首版不发布 Windows 产物。
+当前不发布 Windows 产物。
 
 ## 内置扩展与裁剪
 
-四个平台默认产物使用 `scripts/profiles/hyperfadmin-slim.env`，ODBC 产物使用在它之上启用 ODBC 的 `scripts/profiles/hyperfadmin-odbc.env`。两者都只保留 SFX、Swoole 服务、Phar 发布、数据库、基础网络、图片处理、二维码压缩和 OPcache 常用扩展：
+普通版使用 `scripts/profiles/hyperfadmin-slim.env`，ODBC 版使用在它之上启用 ODBC 的 `scripts/profiles/hyperfadmin-odbc.env`。通过 `PHPSFX_DB_VARIANT` 选择数据库组合，默认 `mysql-pgsql-sqlite`。共同保留 SFX、Swoole 服务、Phar 发布、基础网络、图片处理、二维码压缩和 OPcache 常用扩展：
 
 ```text
 bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,
-openssl,pcntl,pdo_mysql,pdo_pgsql,pdo_sqlite,phar,posix,redis,simplexml,sockets,
+openssl,pcntl,phar,posix,redis,simplexml,sockets,
 sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib
 ```
 
@@ -63,7 +53,7 @@ exif,gettext,gmp,imagick,intl,mongodb,mysqli,pgsql,readline,session,soap,
 sqlite3,xlswriter,xsl,yaml
 ```
 
-说明：Swoole CLI 的 `+xml` 构建项会同时启用 `dom/simplexml/xmlreader/xmlwriter`；`json/hash/pcre/reflection/PDO/libxml` 等属于 PHP core 或依赖扩展带出的基础能力，不作为独立 `prepare.php +xxx` 参数传入。`intl` 默认不打包，`bz2/gd/opcache` 作为标准能力保留。数据库仅提供 `pdo_mysql`、`pdo_pgsql` 和 `pdo_sqlite`，保留 SQLite 客户端库但不加载 `SQLite3`。
+说明：Swoole CLI 的 `+xml` 构建项会同时启用 `dom/simplexml/xmlreader/xmlwriter`；`json/hash/pcre/reflection/PDO/libxml` 等属于 PHP core 或依赖扩展带出的基础能力，不作为独立 `prepare.php +xxx` 参数传入。`intl` 默认不打包，`bz2/gd/opcache` 作为标准能力保留。数据库按所选组合仅提供相应 `pdo_mysql`、`pdo_pgsql`、`pdo_sqlite`；三个组合均保留 SQLite 客户端库，但不加载 `SQLite3`。`mysql-sqlite` 版不构建 libpq。
 
 构建脚本还会把 Swoole CLI 上游默认的 full profile 收敛为 `PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS`，并进一步裁剪底层依赖：
 
@@ -88,8 +78,8 @@ GitHub Actions workflow：`.github/workflows/release.yml`。
 示例：
 
 ```bash
-git tag v6.2.3.0
-git push origin swoole-cli v6.2.3.0
+git tag v6.2.3.1
+git push origin swoole-cli v6.2.3.1
 ```
 
 默认上游源码：
@@ -127,7 +117,7 @@ PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
   bash scripts/build-swoole-cli.sh macos-a64
 ```
 
-如果本地已经安装了 PHP 8.5.9 / Swoole 6.2.3 CLI，可以先导入为标准命名产物，用于快速验证下游打包链路。注意官方 full runtime 通常包含额外扩展，导入时如只是本地调试可显式允许额外扩展；正式发布仍应使用源码构建的 slim 产物：
+如果本地已经安装了 PHP 8.5.9 / Swoole 6.2.3 CLI，可以先导入为标准命名产物，用于快速验证下游打包链路。额外的非数据库扩展可在本地调试时允许，但 PDO 驱动仍必须与所选组合完全一致；正式发布仍应使用源码构建的 slim 产物：
 
 ```bash
 PHPSFX_ALLOW_EXTRA_EXTENSIONS=1 \
@@ -150,11 +140,11 @@ PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
   bash scripts/build-swoole-cli.sh linux-x64
 ```
 
-> Linux/macOS 构建均依赖本机编译工具链。默认 Profile 生成无 ODBC 依赖的基础产物；只有显式使用 ODBC Profile 才生成 `-odbc` 产物。
+> Linux/macOS 构建均依赖本机编译工具链。默认组合是 `mysql-pgsql-sqlite`；设置 `PHPSFX_DB_VARIANT=pgsql-sqlite` 或 `mysql-sqlite` 可以构建其余组合。只有显式使用 ODBC Profile 才生成 `-odbc` 产物。
 
 ## 通用 ODBC 运行时
 
-四个平台的 `-odbc` 产物使用 Swoole 6.2.3 和 PHP 8.5.9 的协程 PDO ODBC 驱动。它只提供统一连接接口，不包含 unixODBC、任何数据库厂商客户端、DSN、账号或密码，也不代表 SQL 方言、迁移、分页、标识符、字段类型和字符集已经兼容目标数据库。
+四个平台的三种 `-odbc` 产物使用 Swoole 6.2.3 和 PHP 8.5.9 的协程 PDO ODBC 驱动。它只提供统一连接接口，不包含 unixODBC、任何数据库厂商客户端、DSN、账号或密码，也不代表 SQL 方言、迁移、分页、标识符、字段类型和字符集已经兼容目标数据库。
 
 通用安装、PHP 接口、服务环境和 MySQL、SQLite、PostgreSQL、SQL Server、Oracle，以及达梦、人大金仓、openGauss/GaussDB、OceanBase、GBase、神通、瀚高、Vastbase、TiDB、GoldenDB 等国产数据库接入路径见 [ODBC 环境与常见数据库接入](docs/odbc-runtime.md)。达梦的官方客户端安装、真实连库脚本和生产验收边界见 [达梦 ODBC 环境与真实验收](docs/dameng-odbc-runtime.md)。
 
@@ -202,10 +192,10 @@ $pdo = new PDO(
 
 ```bash
 bash scripts/test-dameng-odbc.sh \
-  dist/swoole-cli-php8.5-linux-x64-odbc
+  dist/swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite-odbc
 
 bash scripts/test-dameng-odbc.sh \
-  dist/swoole-cli-php8.5-linux-a64-odbc
+  dist/swoole-cli-php8.5-linux-a64-mysql-pgsql-sqlite-odbc
 ```
 
 在隔离的验收账号和测试 schema 中设置 `PHPSFX_DM_ODBC_ALLOW_WRITE=1`，可进一步验证参数绑定、中文、数值、时间、事务、错误传播和并发连接。脚本创建唯一测试表并在 `finally` 中精确删除；不要对未授权的生产账号启用写入验收。
@@ -218,17 +208,19 @@ bash scripts/test-dameng-odbc.sh \
 - `PHP_SAPI === "cli"`。
 - `SWOOLE_CLI` 常量存在。
 - 数字版本的 `PHPSFX_SWOOLE_SRC_REF` 与运行时 `SWOOLE_VERSION` 完全一致。
-- `swoole`、`redis`、`pdo_mysql`、`pdo_pgsql`、`pdo_sqlite`、`openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter`、`bz2`、`gd`、`opcache` 等必需扩展已加载。
-- `PDO::getAvailableDrivers()` 包含 `mysql`、`pgsql`、`sqlite`，`PDO("sqlite::memory:")` 可执行读写；`SQLite3` 类不存在。
+- `swoole`、`redis`、所选组合的 PDO 扩展，以及 `openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter`、`bz2`、`gd`、`opcache` 等必需扩展已加载。
+- `PDO::getAvailableDrivers()` 恰好等于所选驱动集合，未选 PDO 扩展未加载；`PDO("sqlite::memory:")` 可执行读写，`SQLite3` 类不存在。
 - ODBC 产物额外校验 PDO ODBC 驱动、Swoole ODBC 协程 hook 和平台对应的动态 unixODBC 依赖。
 - `mysqli`、原生 `pgsql`、`sqlite3` 和 `exif/gettext/gmp/imagick/intl/mongodb/readline/session/soap/xlswriter/xsl/yaml` 等未使用扩展未被打包。
 
 发布矩阵还会使用 `tests/hyperf-smoke` 中固定版本的 Hyperf 3.2 最小应用启动 HTTP 服务，验证请求协程、Swoole 版本和 PDO SQLite 查询：
 
+`bash tests/test-release-variants.sh` 可先快速检查六种 Profile 的扩展集合与新旧下载命名。
+
 ```bash
 composer install --working-dir=tests/hyperf-smoke --no-dev
 PHPSFX_EXPECTED_SWOOLE_VERSION=6.2.3 \
-  bash scripts/test-hyperf-smoke.sh dist/swoole-cli-php8.5-linux-x64
+  bash scripts/test-hyperf-smoke.sh dist/swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite
 ```
 
 手动校验已有产物：
@@ -238,37 +230,40 @@ PHPSFX_EXPECTED_PHP_PREFIX=8.5. \
 PHPSFX_EXPECTED_PHP_VERSION=8.5.9 \
 PHPSFX_EXPECTED_SWOOLE_VERSION=6.2.3 \
 PHPSFX_EXPECT_SWOOLE_ODBC=1 \
+PHPSFX_REQUIRED_PDO_DRIVERS=mysql,pgsql,sqlite,odbc \
 PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,bz2,gd,opcache \
 PHPSFX_FORBIDDEN_EXTENSIONS=exif,gettext,gmp,imagick,intl,mongodb,mysqli,pgsql,readline,session,soap,sqlite3,xlswriter,xsl,yaml \
-  bash scripts/validate-swoole-cli.sh dist/swoole-cli-php8.5-linux-x64-odbc
+  bash scripts/validate-swoole-cli.sh dist/swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite-odbc
 ```
 
 ## 下载 Release 运行时
 
 ```bash
-bash scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
+bash scripts/download-release-asset.sh linux-x64-mysql-sqlite latest /tmp/swoole-cli
 ```
 
 也可指定版本：
 
 ```bash
-bash scripts/download-release-asset.sh linux-x64 v0.1.0 /tmp/swoole-cli
+bash scripts/download-release-asset.sh linux-x64-pgsql-sqlite v6.2.3.1 /tmp/swoole-cli
 ```
 
-下载默认产物或 ODBC 产物：
+下载不同组合或 ODBC 产物：
 
 ```bash
-bash scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
-bash scripts/download-release-asset.sh linux-x64-odbc latest /tmp/swoole-cli-odbc
-bash scripts/download-release-asset.sh macos-a64-odbc latest /tmp/swoole-cli-odbc-macos
+bash scripts/download-release-asset.sh linux-x64-mysql-pgsql-sqlite latest /tmp/swoole-cli
+bash scripts/download-release-asset.sh linux-x64-pgsql-sqlite-odbc latest /tmp/swoole-cli-odbc
+bash scripts/download-release-asset.sh macos-a64-mysql-sqlite-odbc latest /tmp/swoole-cli-odbc-macos
 ```
+
+为兼容旧命令，`linux-x64`、`linux-x64-odbc` 等不带组合名的参数在 `latest` 和 `v6.2.3.1` 及之后的版本中映射到 `mysql-pgsql-sqlite` 组合；指定 `v6.2.3.0` 时仍下载对应的旧文件名。
 
 ## PHP 源码打包
 
 单个 PHP 入口文件可直接追加到 `swoole-cli`：
 
 ```bash
-bash scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
+bash scripts/download-release-asset.sh linux-x64-mysql-pgsql-sqlite latest /tmp/swoole-cli
 
 bash scripts/pack-php.sh \
   /tmp/swoole-cli \
@@ -294,7 +289,7 @@ chmod +x build/hello
 复杂项目推荐先生成可执行 Phar，再追加到 `swoole-cli`：
 
 ```bash
-bash scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
+bash scripts/download-release-asset.sh linux-x64-mysql-pgsql-sqlite latest /tmp/swoole-cli
 
 bash scripts/pack-phar.sh \
   /tmp/swoole-cli \
@@ -324,7 +319,7 @@ chmod +x build/app
 对已有 `swoole-cli` 同时测试 PHP 与 Phar 两种 SFX 打包方式：
 
 ```bash
-bash scripts/test-packaging.sh swoole-cli-php8.5-linux-x64
+bash scripts/test-packaging.sh swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite
 ```
 
 

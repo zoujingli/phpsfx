@@ -30,9 +30,16 @@ def main() -> int:
         print(f"No build-meta-*.json files found in {dist}", file=sys.stderr)
         return 1
 
+    for key in ("variant", "asset"):
+        values = [str(item.get(key, "")) for item in platforms]
+        if "" in values or len(values) != len(set(values)):
+            print(f"Build metadata contains missing or duplicate {key} values", file=sys.stderr)
+            return 1
+
     first = platforms[0]
     php_versions = sorted({str(item.get("php_version", "")) for item in platforms if item.get("php_version", "")})
     profiles = sorted({str(item.get("profile", "")) for item in platforms if item.get("profile", "")})
+    database_variants = sorted({str(item.get("database_variant", "")) for item in platforms if item.get("database_variant", "")})
     swoole_cli_refs = sorted({str(item.get("swoole_cli_ref", "")) for item in platforms if item.get("swoole_cli_ref", "")})
     swoole_src_refs = sorted({str(item.get("swoole_src_ref", "")) for item in platforms if item.get("swoole_src_ref", "")})
     swoole_versions = sorted({str(item.get("swoole_version", "")) for item in platforms if item.get("swoole_version", "")})
@@ -40,15 +47,8 @@ def main() -> int:
     php_full_versions = sorted({str(item.get("php_full_version", "")) for item in platforms if item.get("php_full_version", "")})
     upstream_baseline_commits = sorted({str(item.get("upstream_baseline_commit", "")) for item in platforms if item.get("upstream_baseline_commit", "")})
     profile_components = {
-        profile: next(
-            (
-                str(item.get("extensions", ""))
-                for item in platforms
-                if str(item.get("profile", "")) == profile and item.get("extensions", "")
-            ),
-            "",
-        )
-        for profile in profiles
+        f"{item['profile']}/{item['database_variant']}": str(item.get("extensions", ""))
+        for item in platforms
     }
     payload = {
         "version": env_or_default("PHPSFX_RELEASE_VERSION", ""),
@@ -56,6 +56,7 @@ def main() -> int:
         "cli_versions": cli_versions,
         "sfx_format": "swoole-cli + payload + pack('J', payloadSize)",
         "profiles": profiles,
+        "database_variants": database_variants,
         "profile_components": profile_components,
         "php_versions": php_versions,
         "php_full_versions": php_full_versions,

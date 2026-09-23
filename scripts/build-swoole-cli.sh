@@ -37,6 +37,7 @@ if [[ "${GITHUB_ACTIONS:-}" == "true" && -z "${PHPSFX_BUILD_JOBS:-}" ]]; then
 fi
 JOBS=${PHPSFX_BUILD_JOBS:-${DEFAULT_JOBS}}
 PROFILE_NAME=${PHPSFX_PROFILE_NAME:-hyperfadmin-slim}
+DB_VARIANT=${PHPSFX_DB_VARIANT:-mysql-pgsql-sqlite}
 DEFAULT_EXTENSIONS='bcmath,bz2,ctype,curl,dom,fileinfo,filter,gd,iconv,mbstring,opcache,openssl,pcntl,pdo_mysql,pdo_pgsql,pdo_sqlite,phar,posix,redis,simplexml,sockets,sodium,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
 DEFAULT_PREPARE_FLAGS='+bcmath +bz2 +ctype +curl +fileinfo +filter +gd +iconv +mbstring +opcache +openssl +pcntl +pdo_mysql +pdo_pgsql +pdo_sqlite +phar +posix +redis +sockets +sodium +swoole +tokenizer +xml +zip +zlib -exif -gettext -gmp -imagick -intl -mongodb -mysqli -pgsql -readline -session -soap -sqlite3 -xlswriter -xsl -yaml'
 PREPARE_FLAGS=${PHPSFX_SWOOLE_CLI_PREPARE_FLAGS:-${DEFAULT_PREPARE_FLAGS}}
@@ -68,6 +69,7 @@ Important environment variables:
   PHPSFX_FORBIDDEN_EXTENSIONS        Comma-separated extensions that must not be loaded
   PHPSFX_ALLOW_EXTRA_EXTENSIONS      Set to 1 to skip forbidden-extension checks for local full-runtime smoke
   PHPSFX_PROFILE_FILE                Profile env file, default: scripts/profiles/hyperfadmin-slim.env
+  PHPSFX_DB_VARIANT                 PDO combination: pgsql-sqlite, mysql-sqlite, mysql-pgsql-sqlite
   PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS Comma-separated prepare.php default extension list override
   PHPSFX_SWOOLE_SLIM_EXTENSION       Set to 1 to trim optional Swoole extension features, default from profile: 1
   PHPSFX_CURL_SLIM_LIBRARY           Set to 1 to trim optional libcurl features, default from profile: 1
@@ -694,6 +696,7 @@ return function (Preprocessor $p) {
 PHP
   echo "Applied PDO SQLite extension builder" >&2
 
+  if [[ " ${PREPARE_FLAGS} " == *" +pdo_pgsql "* ]]; then
   pdo_pgsql_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/pdo_pgsql.php"
   cat > "${pdo_pgsql_file}" <<'PHP'
 <?php
@@ -793,6 +796,7 @@ EOF
 };
 PHP
   echo "Applied PDO-only PostgreSQL client builder" >&2
+  fi
 
   if [[ "${PHPSFX_SWOOLE_SLIM_EXTENSION:-0}" == "1" ]]; then
     swoole_file="${SWOOLE_CLI_DIR}/sapi/src/builder/extension/swoole.php"
@@ -1141,7 +1145,9 @@ prime_php85_core_extensions
 prime_swoole_extension_archive
 patch_swoole_623_php85_compat
 prime_pdo_sqlite_extension_source
-prime_pdo_pgsql_extension_source
+if [[ " ${PREPARE_FLAGS} " == *" +pdo_pgsql "* ]]; then
+  prime_pdo_pgsql_extension_source
+fi
 if [[ "${SWOOLE_ODBC_ENABLED}" == "1" ]]; then
   patch_swoole_odbc_configure_probe
 fi
@@ -1232,7 +1238,8 @@ cat > "${DIST_DIR}/build-meta-${PLATFORM}${ASSET_SUFFIX_PART}.json" <<META
   "variant": "${PLATFORM}${ASSET_SUFFIX_PART}",
   "asset": "${ASSET_NAME}",
   "profile": "${PROFILE_NAME}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.0}",
+  "database_variant": "${DB_VARIANT}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.1}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",

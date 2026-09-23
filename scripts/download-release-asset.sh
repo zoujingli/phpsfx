@@ -4,14 +4,13 @@ set -Eeuo pipefail
 
 if [[ $# -lt 1 || $# -gt 3 ]]; then
   cat >&2 <<'USAGE'
-Usage: scripts/download-release-asset.sh <platform> [version] [output-file]
+Usage: scripts/download-release-asset.sh <platform>[-<database-combination>][-odbc] [version] [output-file]
 
 Examples:
   scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
-  scripts/download-release-asset.sh linux-x64-odbc latest /tmp/swoole-cli-odbc
-  scripts/download-release-asset.sh linux-a64 latest /tmp/swoole-cli-arm64
-  scripts/download-release-asset.sh macos-a64-odbc v0.1.0 ./swoole-cli-odbc
-  scripts/download-release-asset.sh macos-a64 v0.1.0 ./swoole-cli
+  scripts/download-release-asset.sh linux-x64-pgsql-sqlite-odbc latest /tmp/swoole-cli-odbc
+  scripts/download-release-asset.sh linux-a64-mysql-sqlite v6.2.3.1 /tmp/swoole-cli-arm64
+  scripts/download-release-asset.sh macos-a64-odbc v6.2.3.0 ./swoole-cli-old-odbc
 
 Environment:
   PHPSFX_RELEASE_REPO       GitHub repo, default: zoujingli/phpsfx
@@ -28,10 +27,39 @@ REPO=${PHPSFX_RELEASE_REPO:-zoujingli/phpsfx}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.5}
 ASSET_PREFIX=${PHPSFX_ASSET_PREFIX:-swoole-cli}
 
-case "${PLATFORM}" in
-  linux-x64|linux-x64-odbc|linux-a64|linux-a64-odbc|macos-x64|macos-x64-odbc|macos-a64|macos-a64-odbc) ;;
-  *) echo "Unsupported platform: ${PLATFORM}" >&2; exit 2 ;;
-esac
+if [[ "${PLATFORM}" =~ ^(linux-x64|linux-a64|macos-x64|macos-a64)(-(pgsql-sqlite|mysql-sqlite|mysql-pgsql-sqlite))?(-odbc)?$ ]]; then
+  database=${BASH_REMATCH[3]:-}
+else
+  echo "Unsupported platform or database combination: ${PLATFORM}" >&2
+  exit 2
+fi
+
+new_asset=0
+if [[ "${VERSION}" == latest ]]; then
+  new_asset=1
+elif [[ "${VERSION}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+  major=${BASH_REMATCH[1]}
+  minor=${BASH_REMATCH[2]}
+  patch=${BASH_REMATCH[3]}
+  revision=${BASH_REMATCH[4]}
+  if (( 10#${major} > 6 ||
+        (10#${major} == 6 && 10#${minor} > 2) ||
+        (10#${major} == 6 && 10#${minor} == 2 && 10#${patch} > 3) ||
+        (10#${major} == 6 && 10#${minor} == 2 && 10#${patch} == 3 && 10#${revision} >= 1) )); then
+    new_asset=1
+  fi
+fi
+
+if [[ "${new_asset}" == 1 && -z "${database}" ]]; then
+  if [[ "${PLATFORM}" == *-odbc ]]; then
+    PLATFORM="${PLATFORM%-odbc}-mysql-pgsql-sqlite-odbc"
+  else
+    PLATFORM="${PLATFORM}-mysql-pgsql-sqlite"
+  fi
+elif [[ "${new_asset}" == 0 && -n "${database}" ]]; then
+  echo "Version ${VERSION} does not have database-combination assets" >&2
+  exit 2
+fi
 
 ASSET="${ASSET_PREFIX}-php${PHP_VERSION}-${PLATFORM}"
 if [[ -z "${OUTPUT}" ]]; then

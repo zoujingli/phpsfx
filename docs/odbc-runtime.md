@@ -2,14 +2,14 @@
 
 本文说明 `phpsfx` 通用 ODBC 运行时的选择、安装、配置、开发和验收方法，覆盖常见国际数据库以及达梦、人大金仓、openGauss/GaussDB、OceanBase、GBase、神通、瀚高、Vastbase、TiDB、GoldenDB 等国产数据库接入路线。
 
-适用 Release 文件：
+适用 Release 文件（以下为三数据库全量组合，其余组合把 `mysql-pgsql-sqlite` 换成 `mysql-sqlite` 或 `pgsql-sqlite`）：
 
-- `swoole-cli-php8.5-linux-x64-odbc`
-- `swoole-cli-php8.5-linux-a64-odbc`
-- `swoole-cli-php8.5-macos-x64-odbc`
-- `swoole-cli-php8.5-macos-a64-odbc`
+- `swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite-odbc`
+- `swoole-cli-php8.5-linux-a64-mysql-pgsql-sqlite-odbc`
+- `swoole-cli-php8.5-macos-x64-mysql-pgsql-sqlite-odbc`
+- `swoole-cli-php8.5-macos-a64-mysql-pgsql-sqlite-odbc`
 
-不使用 ODBC 时请选择不带 `-odbc` 的默认产物。默认产物包含 `pdo_mysql`、`pdo_pgsql` 和 `pdo_sqlite`，不加载 PHP `mysqli`、原生 `pgsql` 或 `SQLite3` 扩展，进程启动不依赖 unixODBC。
+不使用 ODBC 时请选择不带 `-odbc` 的对应组合产物。数据库组合仅加载选定的 PDO 驱动，不加载 PHP `mysqli`、原生 `pgsql` 或 `SQLite3` 扩展，进程启动不依赖 unixODBC。
 
 ## 1. 能力与责任边界
 
@@ -36,7 +36,7 @@ Release 不包含：
 | unixODBC Driver Manager | `-odbc` 进程启动时 | 部署系统或 Homebrew |
 | 数据库厂商 ODBC 驱动 | 实际连接对应数据库时 | 数据库厂商或操作系统仓库 |
 
-因此，厂商驱动是按数据库可选的，但 unixODBC 对 `-odbc` 产物不是延迟依赖。只使用 MySQL/SQLite 且不希望安装 unixODBC 时，应下载默认产物。
+因此，厂商驱动是按数据库可选的，但 unixODBC 对 `-odbc` 产物不是延迟依赖。只使用 MySQL/SQLite 且不希望安装 unixODBC 时，应下载 `mysql-sqlite` 普通版。
 
 ## 2. 选择平台和架构
 
@@ -44,10 +44,10 @@ Release 不包含：
 
 | 目标环境 | Release 平台 | Driver Manager 动态库 | 厂商驱动格式 |
 |----------|--------------|------------------------|--------------|
-| Linux x86_64 | `linux-x64-odbc` | `libodbc.so.2` | x86_64 ELF `.so` |
-| Linux ARM64 | `linux-a64-odbc` | `libodbc.so.2` | ARM64 ELF `.so` |
-| macOS Intel | `macos-x64-odbc` | `libodbc.2.dylib` | Intel Mach-O `.dylib` |
-| macOS Apple Silicon | `macos-a64-odbc` | `libodbc.2.dylib` | ARM64 Mach-O `.dylib` |
+| Linux x86_64 | `linux-x64-<组合>-odbc` | `libodbc.so.2` | x86_64 ELF `.so` |
+| Linux ARM64 | `linux-a64-<组合>-odbc` | `libodbc.so.2` | ARM64 ELF `.so` |
+| macOS Intel | `macos-x64-<组合>-odbc` | `libodbc.2.dylib` | Intel Mach-O `.dylib` |
+| macOS Apple Silicon | `macos-a64-<组合>-odbc` | `libodbc.2.dylib` | ARM64 Mach-O `.dylib` |
 
 Linux 厂商驱动不能复制到 macOS 使用，x86_64 驱动也不能由 ARM64 进程直接加载。macOS 运行时具备 ODBC 能力，不代表每个数据库厂商都提供 macOS 驱动；没有对应平台的厂商驱动就不能在该平台连接该数据库。
 
@@ -217,7 +217,7 @@ odbc:<odbc.ini 节名>
 
 ### MySQL / MariaDB
 
-优先使用默认产物中的 `pdo_mysql`。ODBC 配置示例：
+优先使用 `mysql-sqlite` 或 `mysql-pgsql-sqlite` 普通版中的 `pdo_mysql`。ODBC 配置示例：
 
 ```ini
 [MySQL Unicode]

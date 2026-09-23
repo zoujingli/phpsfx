@@ -84,6 +84,10 @@ $missingPdoDrivers = array_values(array_diff($requiredPdoDrivers, $pdoDrivers));
 if ($missingPdoDrivers !== []) {
     $errors[] = "Missing PDO drivers: " . implode(", ", $missingPdoDrivers);
 }
+$unexpectedPdoDrivers = array_values(array_diff($pdoDrivers, $requiredPdoDrivers));
+if ($unexpectedPdoDrivers !== []) {
+    $errors[] = "Unexpected PDO drivers: " . implode(", ", $unexpectedPdoDrivers);
+}
 $odbcHook = defined("SWOOLE_HOOK_PDO_ODBC") ? constant("SWOOLE_HOOK_PDO_ODBC") : 0;
 $allHooks = defined("SWOOLE_HOOK_ALL") ? constant("SWOOLE_HOOK_ALL") : 0;
 $odbcSmoke = [
@@ -141,6 +145,7 @@ $result = [
     "forbidden_extensions" => $forbidden,
     "pdo_drivers" => $pdoDrivers,
     "required_pdo_drivers" => $requiredPdoDrivers,
+    "unexpected_pdo_drivers" => $unexpectedPdoDrivers,
     "allow_extra_extensions" => $allowExtra,
     "odbc" => $odbcSmoke,
     "sqlite_smoke" => $sqliteSmoke,

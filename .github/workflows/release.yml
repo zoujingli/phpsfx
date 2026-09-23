@@ -9,7 +9,7 @@ on:
       version:
         description: 'Self-maintained swoole-cli release or workflow artifact version'
         required: true
-        default: 'v6.2.3.0'
+        default: 'v6.2.3.1'
         type: string
       publish:
         description: 'Create a GitHub Release after all builds and checks pass'
@@ -54,78 +54,30 @@ env:
 
 jobs:
   build:
-    name: Build ${{ matrix.variant }}
-    runs-on: ${{ matrix.runner }}
+    name: Build ${{ format('{0}-{1}{2}', matrix.platform.name, matrix.database, matrix.odbc && '-odbc' || '') }}
+    runs-on: ${{ matrix.platform.runner }}
     timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: linux-x64
-            variant: linux-x64
-            runner: ubuntu-latest
-            profile: scripts/profiles/hyperfadmin-slim.env
-            asset_suffix: ''
-            asset_tail: linux-x64
-            odbc: false
-          - platform: linux-a64
-            variant: linux-a64
-            runner: ubuntu-24.04-arm
-            profile: scripts/profiles/hyperfadmin-slim.env
-            asset_suffix: ''
-            asset_tail: linux-a64
-            odbc: false
-          - platform: macos-x64
-            variant: macos-x64
-            runner: macos-15-intel
-            profile: scripts/profiles/hyperfadmin-slim.env
-            asset_suffix: ''
-            asset_tail: macos-x64
-            odbc: false
-          - platform: macos-a64
-            variant: macos-a64
-            runner: macos-15
-            profile: scripts/profiles/hyperfadmin-slim.env
-            asset_suffix: ''
-            asset_tail: macos-a64
-            odbc: false
-          - platform: linux-x64
-            variant: linux-x64-odbc
-            runner: ubuntu-latest
-            profile: scripts/profiles/hyperfadmin-odbc.env
-            asset_suffix: odbc
-            asset_tail: linux-x64-odbc
-            odbc: true
-          - platform: linux-a64
-            variant: linux-a64-odbc
-            runner: ubuntu-24.04-arm
-            profile: scripts/profiles/hyperfadmin-odbc.env
-            asset_suffix: odbc
-            asset_tail: linux-a64-odbc
-            odbc: true
-          - platform: macos-x64
-            variant: macos-x64-odbc
-            runner: macos-15-intel
-            profile: scripts/profiles/hyperfadmin-odbc.env
-            asset_suffix: odbc
-            asset_tail: macos-x64-odbc
-            odbc: true
-          - platform: macos-a64
-            variant: macos-a64-odbc
-            runner: macos-15
-            profile: scripts/profiles/hyperfadmin-odbc.env
-            asset_suffix: odbc
-            asset_tail: macos-a64-odbc
-            odbc: true
+        platform:
+          - { name: linux-x64, runner: ubuntu-latest }
+          - { name: linux-a64, runner: ubuntu-24.04-arm }
+          - { name: macos-x64, runner: macos-15-intel }
+          - { name: macos-a64, runner: macos-15 }
+        database: [pgsql-sqlite, mysql-sqlite, mysql-pgsql-sqlite]
+        odbc: [false, true]
     env:
-      PHPSFX_PLATFORM: ${{ matrix.platform }}
-      PHPSFX_PROFILE_FILE: ${{ matrix.profile }}
-      PHPSFX_ASSET_SUFFIX: ${{ matrix.asset_suffix }}
+      PHPSFX_VARIANT: ${{ format('{0}-{1}{2}', matrix.platform.name, matrix.database, matrix.odbc && '-odbc' || '') }}
+      PHPSFX_PLATFORM: ${{ matrix.platform.name }}
+      PHPSFX_DB_VARIANT: ${{ matrix.database }}
+      PHPSFX_PROFILE_FILE: ${{ matrix.odbc && 'scripts/profiles/hyperfadmin-odbc.env' || 'scripts/profiles/hyperfadmin-slim.env' }}
+      PHPSFX_RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
       PHPSFX_PHP_VERSION: ${{ github.event.inputs.php_version || '8.5' }}
       PHPSFX_PHP_FULL_VERSION: ${{ github.event.inputs.php_full_version || '8.5.9' }}
       PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'f7903840c3e959612dac7d413205e1bdb0067029' }}
       PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.3' }}
-      PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/${{ matrix.variant }}
+      PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/${{ format('{0}-{1}{2}', matrix.platform.name, matrix.database, matrix.odbc && '-odbc' || '') }}
       PHPSFX_BUILD_JOBS: 2
 
     steps:
@@ -187,11 +139,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build/swoole-cli/pool
-          key: phpsfx-swoole-cli-pool-${{ matrix.variant }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-${{ env.PHPSFX_SWOOLE_SRC_REF }}-${{ hashFiles('scripts/profiles/*.env') }}
+          key: phpsfx-swoole-cli-pool-${{ env.PHPSFX_VARIANT }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-${{ env.PHPSFX_SWOOLE_SRC_REF }}-${{ hashFiles('scripts/profiles/*.env') }}
           restore-keys: |
-            phpsfx-swoole-cli-pool-${{ matrix.variant }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-${{ env.PHPSFX_SWOOLE_SRC_REF }}-
-            phpsfx-swoole-cli-pool-${{ matrix.variant }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-
-            phpsfx-swoole-cli-pool-${{ matrix.variant }}-
+            phpsfx-swoole-cli-pool-${{ env.PHPSFX_VARIANT }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-${{ env.PHPSFX_SWOOLE_SRC_REF }}-
+            phpsfx-swoole-cli-pool-${{ env.PHPSFX_VARIANT }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-
+            phpsfx-swoole-cli-pool-${{ env.PHPSFX_VARIANT }}-
             phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-${{ env.PHPSFX_SWOOLE_SRC_REF }}-
             phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-${{ env.PHPSFX_SWOOLE_CLI_REF }}-
             phpsfx-swoole-cli-pool-${{ runner.os }}-${{ runner.arch }}-
@@ -204,6 +156,9 @@ jobs:
           composer --version
           git --version
           make --version | head -1
+
+      - name: Check release profiles and asset names
+        run: bash tests/test-release-variants.sh
 
       - name: Install Hyperf smoke dependencies
         run: |
@@ -219,55 +174,55 @@ jobs:
             unset PHPSFX_SWOOLE_CLI_PREPARE_FLAGS
           fi
           set +e
-          bash scripts/build-swoole-cli.sh "${PHPSFX_PLATFORM}" 2>&1 | tee "build-${{ matrix.variant }}.log"
+          bash scripts/build-swoole-cli.sh "${PHPSFX_PLATFORM}" 2>&1 | tee "build-${PHPSFX_VARIANT}.log"
           status=${PIPESTATUS[0]}
           set -e
           if [ "${status}" -ne 0 ]; then
             {
               echo "== matched errors =="
-              grep -Ein 'fatal error|[^A-Za-z]error:|undefined reference|failed|killed|No such|cannot find|not found|permission denied|make(\\[[0-9]+\\])?: \\*\\*\\*' "build-${{ matrix.variant }}.log" | tail -140 || true
+              grep -Ein 'fatal error|[^A-Za-z]error:|undefined reference|failed|killed|No such|cannot find|not found|permission denied|make(\\[[0-9]+\\])?: \\*\\*\\*' "build-${PHPSFX_VARIANT}.log" | tail -140 || true
               echo
               echo "== build log tail =="
-              tail -240 "build-${{ matrix.variant }}.log"
-            } > "build-${{ matrix.variant }}-summary.log"
-            if [ ! -s "build-${{ matrix.variant }}-summary.log" ]; then
-              tail -120 "build-${{ matrix.variant }}.log" > "build-${{ matrix.variant }}-summary.log"
+              tail -240 "build-${PHPSFX_VARIANT}.log"
+            } > "build-${PHPSFX_VARIANT}-summary.log"
+            if [ ! -s "build-${PHPSFX_VARIANT}-summary.log" ]; then
+              tail -120 "build-${PHPSFX_VARIANT}.log" > "build-${PHPSFX_VARIANT}-summary.log"
             fi
-            tail_text=$(cat "build-${{ matrix.variant }}-summary.log" | tr '\n' '|' | sed -e 's/%/%25/g')
-            echo "::error title=Build failed ${{ matrix.variant }}::${tail_text}"
+            tail_text=$(cat "build-${PHPSFX_VARIANT}-summary.log" | tr '\n' '|' | sed -e 's/%/%25/g')
+            echo "::error title=Build failed ${PHPSFX_VARIANT}::${tail_text}"
             exit "${status}"
           fi
 
       - name: Test PHP and Phar SFX packaging
         run: |
-          bash scripts/test-packaging.sh "dist/${{ matrix.variant }}/swoole-cli-php${PHPSFX_PHP_VERSION}-${{ matrix.asset_tail }}"
+          bash scripts/test-packaging.sh "dist/${PHPSFX_VARIANT}/swoole-cli-php${PHPSFX_PHP_VERSION}-${PHPSFX_VARIANT}"
 
       - name: Test Hyperf 3.2 runtime
         env:
           PHPSFX_ODBC_SMOKE_DRIVER: ${{ matrix.odbc && 'SQLite3' || '' }}
         run: |
-          bash scripts/test-hyperf-smoke.sh "dist/${{ matrix.variant }}/swoole-cli-php${PHPSFX_PHP_VERSION}-${{ matrix.asset_tail }}"
+          bash scripts/test-hyperf-smoke.sh "dist/${PHPSFX_VARIANT}/swoole-cli-php${PHPSFX_PHP_VERSION}-${PHPSFX_VARIANT}"
 
       - name: Upload failure log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-${{ matrix.variant }}
+          name: build-log-${{ env.PHPSFX_VARIANT }}
           retention-days: 7
           if-no-files-found: ignore
           path: |
-            build-${{ matrix.variant }}.log
-            build-${{ matrix.variant }}-summary.log
+            build-${{ env.PHPSFX_VARIANT }}.log
+            build-${{ env.PHPSFX_VARIANT }}-summary.log
 
       - name: Upload platform artifact
         uses: actions/upload-artifact@v4
         with:
-          name: swoole-cli-${{ matrix.variant }}
+          name: swoole-cli-${{ env.PHPSFX_VARIANT }}
           retention-days: 30
           if-no-files-found: error
           path: |
-            dist/${{ matrix.variant }}/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-${{ matrix.asset_tail }}
-            dist/${{ matrix.variant }}/build-meta-${{ matrix.asset_tail }}.json
+            dist/${{ env.PHPSFX_VARIANT }}/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-${{ env.PHPSFX_VARIANT }}
+            dist/${{ env.PHPSFX_VARIANT }}/build-meta-${{ env.PHPSFX_VARIANT }}.json
 
   release:
     name: Package and optionally publish
@@ -300,29 +255,58 @@ jobs:
           sha256sum swoole-cli-php"${PHPSFX_PHP_VERSION}"-* > SHA256SUMS
           cat SHA256SUMS
           test -s build-meta.json
-          jq -e '.platforms | length == 8' build-meta.json
+          test "$(find . -maxdepth 1 -type f -name 'swoole-cli-php*' | wc -l | tr -d ' ')" -eq 24
+          test "$(find . -maxdepth 1 -type f -name 'build-meta-*.json' | wc -l | tr -d ' ')" -eq 24
+          test "$(wc -l < SHA256SUMS | tr -d ' ')" -eq 24
+          sha256sum -c SHA256SUMS
+          jq -e --arg version "${PHPSFX_RELEASE_VERSION}" '
+            .version == $version and (.platforms | length == 24) and
+            (.platforms | map(.variant) | unique | length == 24) and
+            (.platforms | map(.asset) | unique | length == 24) and
+            (.cli_versions == [$version])
+          ' build-meta.json
           for platform in linux-x64 linux-a64 macos-x64 macos-a64; do
-            default_asset="swoole-cli-php${PHPSFX_PHP_VERSION}-${platform}"
-            default_meta="build-meta-${platform}.json"
-            odbc_asset="${default_asset}-odbc"
-            odbc_meta="build-meta-${platform}-odbc.json"
             case "${platform}" in
               linux-*) odbc_dependency=libodbc.so.2 ;;
               macos-*) odbc_dependency=libodbc.2.dylib ;;
             esac
-            test -s "${default_asset}"
-            test -s "${default_meta}"
-            test -s "${odbc_asset}"
-            test -s "${odbc_meta}"
-            grep -F "  ${default_asset}" SHA256SUMS
-            grep -F "  ${odbc_asset}" SHA256SUMS
-            jq -e '.profile == "hyperfadmin-slim" and .swoole_odbc == false and .odbc_dynamic_dependency == ""' \
-              "${default_meta}"
-            jq -e --arg dependency "${odbc_dependency}" \
-              '.profile == "hyperfadmin-odbc" and .swoole_odbc == true and .odbc_dynamic_dependency == $dependency' \
-              "${odbc_meta}"
-            jq -e --arg asset "${odbc_asset}" \
-              '.platforms | any(.asset == $asset and .swoole_odbc == true)' build-meta.json
+            for database in pgsql-sqlite mysql-sqlite mysql-pgsql-sqlite; do
+              case "${database}" in
+                pgsql-sqlite) drivers=pgsql,sqlite ;;
+                mysql-sqlite) drivers=mysql,sqlite ;;
+                mysql-pgsql-sqlite) drivers=mysql,pgsql,sqlite ;;
+              esac
+              for odbc in false true; do
+                suffix=
+                profile=hyperfadmin-slim
+                dependency=
+                expected_drivers="${drivers}"
+                if [ "${odbc}" = true ]; then
+                  suffix=-odbc
+                  profile=hyperfadmin-odbc
+                  dependency="${odbc_dependency}"
+                  expected_drivers="${drivers},odbc"
+                fi
+                variant="${platform}-${database}${suffix}"
+                asset="swoole-cli-php${PHPSFX_PHP_VERSION}-${variant}"
+                meta="build-meta-${variant}.json"
+                test -s "${asset}"
+                test -s "${meta}"
+                grep -Fx "$(sha256sum "${asset}")" SHA256SUMS
+                jq -e --arg platform "${platform}" --arg variant "${variant}" \
+                  --arg asset "${asset}" --arg database "${database}" \
+                  --arg profile "${profile}" --arg drivers "${expected_drivers}" \
+                  --arg dependency "${dependency}" --arg version "${PHPSFX_RELEASE_VERSION}" \
+                  --arg sha "$(sha256sum "${asset}" | cut -d ' ' -f 1)" \
+                  '.platform == $platform and .variant == $variant and .asset == $asset and
+                   .database_variant == $database and .profile == $profile and
+                   .required_pdo_drivers == $drivers and .odbc_dynamic_dependency == $dependency and
+                   .swoole_odbc == ($dependency != "") and .cli_version == $version and .sha256 == $sha' \
+                  "${meta}"
+                jq -e --arg variant "${variant}" --slurpfile metadata "${meta}" \
+                  '.platforms | any(.variant == $variant and . == $metadata[0])' build-meta.json
+              done
+            done
           done
 
       - name: Upload combined workflow artifact
@@ -355,10 +339,11 @@ jobs:
 
             Run packed applications with `--self`, for example `./app --self list`.
 
-            The four default assets include PDO MySQL, PostgreSQL, and SQLite support without an ODBC runtime
-            dependency. The optional `*-odbc` assets add PDO ODBC and Swoole coroutine ODBC support;
-            they require the system unixODBC runtime plus a separately installed vendor driver matching
-            the target platform and architecture. Vendor drivers and credentials are not bundled.
+            The four platforms each provide three PDO-only combinations: `pgsql-sqlite`,
+            `mysql-sqlite`, and `mysql-pgsql-sqlite`. Each combination also has a `-odbc` variant,
+            for 24 binaries in total. ODBC variants add PDO ODBC and Swoole coroutine ODBC;
+            they require the system unixODBC runtime plus a separately installed vendor driver
+            matching the platform and architecture. Vendor drivers and credentials are not bundled.
           files: |
             dist/swoole-cli-php${{ env.PHPSFX_PHP_VERSION }}-*
             dist/build-meta-*.json
