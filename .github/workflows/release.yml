@@ -9,7 +9,7 @@ on:
       version:
         description: 'Self-maintained swoole-cli release or workflow artifact version'
         required: true
-        default: 'v6.2.3.3'
+        default: 'v6.2.3.4'
         type: string
       publish:
         description: 'Create a GitHub Release after all builds and checks pass'
@@ -65,7 +65,7 @@ env:
 
 jobs:
   build:
-    name: Build PHP ${{ matrix.php }} ${{ format('{0}-{1}{2}', matrix.platform.name, matrix.database, matrix.odbc && '-odbc' || '') }}
+    name: Build PHP ${{ matrix.php }} ${{ matrix.platform.name }}-${{ matrix.package.name }}
     runs-on: ${{ matrix.platform.runner }}
     timeout-minutes: 360
     strategy:
@@ -75,22 +75,24 @@ jobs:
         platform:
           - { name: linux-x64, runner: ubuntu-latest }
           - { name: linux-a64, runner: ubuntu-24.04-arm }
-          - { name: macos-x64, runner: macos-15-intel }
           - { name: macos-a64, runner: macos-15 }
-        database: [sqlite, mysql, pgsql, mysql-pgsql, pgsql-sqlite, mysql-sqlite, mysql-pgsql-sqlite]
-        odbc: [false, true]
+        package:
+          - { name: mysql, database: mysql, odbc: false }
+          - { name: pgsql, database: pgsql, odbc: false }
+          - { name: odbc, database: odbc, odbc: true }
+          - { name: sqlite-mysql-pgsql-odbc, database: sqlite-mysql-pgsql, odbc: true }
     env:
-      PHPSFX_VARIANT: ${{ format('{0}-{1}{2}', matrix.platform.name, matrix.database, matrix.odbc && '-odbc' || '') }}
-      PHPSFX_BUILD_KEY: ${{ format('php{0}-{1}-{2}{3}', matrix.php, matrix.platform.name, matrix.database, matrix.odbc && '-odbc' || '') }}
+      PHPSFX_VARIANT: ${{ format('{0}-{1}', matrix.platform.name, matrix.package.name) }}
+      PHPSFX_BUILD_KEY: ${{ format('php{0}-{1}-{2}', matrix.php, matrix.platform.name, matrix.package.name) }}
       PHPSFX_PLATFORM: ${{ matrix.platform.name }}
-      PHPSFX_DB_VARIANT: ${{ matrix.database }}
-      PHPSFX_PROFILE_FILE: ${{ matrix.odbc && 'scripts/profiles/hyperfadmin-odbc.env' || 'scripts/profiles/hyperfadmin-slim.env' }}
+      PHPSFX_DB_VARIANT: ${{ matrix.package.database }}
+      PHPSFX_PROFILE_FILE: ${{ matrix.package.odbc && 'scripts/profiles/hyperfadmin-odbc.env' || 'scripts/profiles/hyperfadmin-slim.env' }}
       PHPSFX_RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
       PHPSFX_PHP_VERSION: ${{ matrix.php }}
       PHPSFX_PHP_FULL_VERSION: ${{ github.event.inputs.php_full_version || (matrix.php == '8.4' && (github.event.inputs.php84_full_version || '8.4.27')) || github.event.inputs.php85_full_version || '8.5.12' }}
       PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'f7903840c3e959612dac7d413205e1bdb0067029' }}
       PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.3' }}
-      PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/${{ format('php{0}-{1}-{2}{3}', matrix.php, matrix.platform.name, matrix.database, matrix.odbc && '-odbc' || '') }}
+      PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/${{ format('php{0}-{1}-{2}', matrix.php, matrix.platform.name, matrix.package.name) }}
       PHPSFX_BUILD_JOBS: 2
 
     steps:
@@ -118,14 +120,14 @@ jobs:
             ninja-build p7zip-full pkg-config python3 python3-pip re2c tar unzip wget xz-utils yasm zip
 
       - name: Install ODBC build and smoke dependencies
-        if: matrix.odbc && runner.os == 'Linux'
+        if: matrix.package.odbc && runner.os == 'Linux'
         run: |
           set -eux
           sudo apt-get install -y libsqliteodbc unixodbc unixodbc-dev
           odbcinst -q -d
 
       - name: Install macOS ODBC build and smoke dependencies
-        if: matrix.odbc && runner.os == 'macOS'
+        if: matrix.package.odbc && runner.os == 'macOS'
         run: |
           set -eux
           brew install sqliteodbc unixodbc
@@ -224,7 +226,7 @@ jobs:
 
       - name: Test Hyperf 3.2 runtime
         env:
-          PHPSFX_ODBC_SMOKE_DRIVER: ${{ matrix.odbc && 'SQLite3' || '' }}
+          PHPSFX_ODBC_SMOKE_DRIVER: ${{ matrix.package.odbc && 'SQLite3' || '' }}
         run: |
           bash scripts/test-hyperf-smoke.sh "${PHPSFX_DIST_DIR}/swoole-cli-php${PHPSFX_PHP_VERSION}-${PHPSFX_VARIANT}"
 
@@ -277,6 +279,7 @@ jobs:
         run: |
           set -eux
           find dist -maxdepth 1 -type f -print | sort
+          python3 tests/test-verify-release-assets.py
           python3 scripts/merge-build-meta.py dist dist/build-meta.json
           cd dist
           sha256sum swoole-cli-php* > SHA256SUMS
@@ -284,7 +287,7 @@ jobs:
           binary_count=$(jq '.platforms | length' build-meta.json)
           {
             printf 'binaries=%s\n' "${binary_count}"
-            printf 'assets=%s\n' "$((binary_count * 2 + 2))"
+            printf 'assets=%s\n' "$((binary_count + 2))"
             printf 'php_releases=%s\n' "$(jq -r '.php_full_versions | join(" / ")' build-meta.json)"
           } >> "${GITHUB_OUTPUT}"
 
@@ -318,17 +321,17 @@ jobs:
 
             Run packed applications with `--self`, for example `./app --self list`.
 
-            The four platforms each provide seven PDO-only combinations: `sqlite`, `mysql`,
-            `pgsql`, `mysql-pgsql`, `pgsql-sqlite`, `mysql-sqlite`, and `mysql-pgsql-sqlite`.
-            Each PHP version line provides every combination with an optional `-odbc` variant,
+            Linux x86_64, Linux ARM64 and macOS ARM64 each provide four PDO-only packages:
+            `mysql`, `pgsql` and `odbc` for production, and `sqlite-mysql-pgsql-odbc` for development.
+            Each selected PHP version line provides all four packages on each platform,
             for ${{ steps.release_meta.outputs.binaries }} binaries and ${{ steps.release_meta.outputs.assets }} Release assets.
-            Binary and metadata filenames include `php8.4` or `php8.5` to keep both version lines separate.
+            Binary filenames include `php8.4` or `php8.5` to keep both version lines separate.
+            All per-build metadata is included in `build-meta.json`; `SHA256SUMS` covers every binary.
             ODBC variants add PDO ODBC and Swoole coroutine ODBC;
             they require the system unixODBC runtime plus a separately installed vendor driver
             matching the platform and architecture. Vendor drivers and credentials are not bundled.
           files: |
             dist/swoole-cli-php*
-            dist/build-meta-*.json
             dist/SHA256SUMS
             dist/build-meta.json
 

@@ -19,6 +19,13 @@ DATABASES = (
     "sqlite", "mysql", "pgsql", "mysql-pgsql", "pgsql-sqlite",
     "mysql-sqlite", "mysql-pgsql-sqlite",
 )
+RELEASE_PLATFORMS = ("linux-x64", "linux-a64", "macos-a64")
+RELEASE_PACKAGES = (
+    ("mysql", "mysql", False),
+    ("pgsql", "pgsql", False),
+    ("odbc", "odbc", True),
+    ("sqlite-mysql-pgsql-odbc", "sqlite-mysql-pgsql", True),
+)
 
 
 def sha256(path: Path) -> str:
@@ -37,14 +44,20 @@ def expected_assets(dist: Path, version: str, php_versions: tuple[str, ...] | No
     assert php_versions and set(php_versions) <= {"8.4", "8.5"}
     assert len(php_versions) == len(set(php_versions))
     assert summary["php_versions"] == sorted(php_versions), "Missing or unexpected PHP version line"
-    variants = {f"{platform}-{database}{suffix}" for platform in PLATFORMS
-                for database in DATABASES for suffix in ("", "-odbc")}
+    compact = version not in ("v6.2.3.2", "v6.2.3.3")
+    platforms = RELEASE_PLATFORMS if compact else PLATFORMS
+    packages = RELEASE_PACKAGES if compact else tuple(
+        (database + ("-odbc" if odbc else ""), database, odbc)
+        for database in DATABASES for odbc in (False, True)
+    )
+    variants = {f"{platform}-{suffix}": (platform, database, odbc)
+                for platform in platforms for suffix, database, odbc in packages}
     identities = {(php, variant) for php in php_versions for variant in variants}
     count = len(identities)
     assert len(summary["platforms"]) == count
     assert {(item["php_version"], item["variant"]) for item in summary["platforms"]} == identities
     assert summary["cli_versions"] == [version]
-    assert summary["database_variants"] == sorted(DATABASES)
+    assert summary["database_variants"] == sorted({p[1] for p in packages})
     full_versions = {
         "8.4": os.getenv("PHPSFX_PHP84_FULL_VERSION") or "8.4.27",
         "8.5": os.getenv("PHPSFX_PHP85_FULL_VERSION") or "8.5.12",
@@ -63,6 +76,7 @@ def expected_assets(dist: Path, version: str, php_versions: tuple[str, ...] | No
     assert set(checksums) == {item["asset"] for item in summary["platforms"]}
 
     expected = {}
+    metadata_files = set()
     for item in summary["platforms"]:
         variant = item["variant"]
         name = item["asset"]
@@ -71,7 +85,7 @@ def expected_assets(dist: Path, version: str, php_versions: tuple[str, ...] | No
         if version == "v6.2.3.2":
             meta = f"build-meta-{variant}.json"
         else:
-            assert item["metadata_asset"] == meta
+            assert item["metadata_asset"] == ("build-meta.json" if compact else meta)
         assert name == f"swoole-cli-php{item['php_version']}-{variant}"
         assert item["php_full_version"] == full_versions[php]
         assert item["php_full_version"].startswith(php + ".")
@@ -80,9 +94,9 @@ def expected_assets(dist: Path, version: str, php_versions: tuple[str, ...] | No
             assert item["swoole_version"] == swoole_ref
         platform, database, odbc = item["platform"], item["database_variant"], item["swoole_odbc"]
         assert isinstance(odbc, bool)
-        assert variant == f"{platform}-{database}" + ("-odbc" if odbc else "")
+        assert (platform, database, odbc) == variants[variant]
         assert item["profile"] == ("hyperfadmin-odbc" if odbc else "hyperfadmin-slim")
-        drivers = database.split("-")
+        drivers = [] if database == "odbc" else database.split("-")
         assert item["required_pdo_drivers"] == ",".join(drivers + (["odbc"] if odbc else []))
         extensions = set(item["extensions"].split(","))
         required = set(item["required_extensions"].split(","))
@@ -98,13 +112,17 @@ def expected_assets(dist: Path, version: str, php_versions: tuple[str, ...] | No
         dependency = "libodbc.so.2" if platform.startswith("linux-") else "libodbc.2.dylib"
         assert item["odbc_dynamic_dependency"] == (dependency if odbc else "")
         assert item["cli_version"] == version and item["sha256"] == checksums[name]
-        assert json.loads((dist / meta).read_text(encoding="utf-8")) == item
+        metadata_files.add(meta)
+        if not compact or (dist / meta).exists():
+            assert json.loads((dist / meta).read_text(encoding="utf-8")) == item
         assert sha256(dist / name) == checksums[name]
         expected[name] = ((dist / name).stat().st_size, checksums[name])
-        expected[meta] = ((dist / meta).stat().st_size, sha256(dist / meta))
-    assert len(expected) == count * 2
+        if not compact:
+            expected[meta] = ((dist / meta).stat().st_size, sha256(dist / meta))
+    assert len(expected) == count * (1 if compact else 2)
     assert {p.name for p in dist.glob("swoole-cli-php*")} == set(checksums)
-    assert {p.name for p in dist.glob("build-meta-*.json")} == set(expected) - set(checksums)
+    found_metadata = {p.name for p in dist.glob("build-meta-*.json")}
+    assert found_metadata == metadata_files or (compact and not found_metadata)
     for name in ("build-meta.json", "SHA256SUMS"):
         expected[name] = ((dist / name).stat().st_size, sha256(dist / name))
     return expected
@@ -151,6 +169,8 @@ def check_public_links(assets: list[dict]) -> None:
         "macos-x64-pgsql", "macos-a64-mysql-pgsql-sqlite-odbc",
     )
     by_name = {asset["name"]: asset for asset in assets}
+    if any(name.endswith("-sqlite-mysql-pgsql-odbc") for name in by_name):
+        variants = ("linux-x64-mysql", "linux-a64-odbc", "macos-a64-sqlite-mysql-pgsql-odbc")
     php_versions = {name.split("-php", 1)[1].split("-", 1)[0] for name in by_name if name.startswith("swoole-cli-php")}
     samples = ["SHA256SUMS", "build-meta.json"] + [
         f"swoole-cli-php{php}-{variant}" for php in sorted(php_versions) for variant in variants

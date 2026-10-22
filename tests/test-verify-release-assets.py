@@ -22,46 +22,85 @@ class ReleaseAssetTests(unittest.TestCase):
         items = []
         checksums = []
         full_versions = {"8.4": "8.4.27", "8.5": "8.5.9" if version == "v6.2.3.2" else "8.5.12"}
+        compact = version == "v6.2.3.4"
+        platforms = ("linux-x64", "linux-a64", "macos-a64") if compact else verify.PLATFORMS
+        packages = [(database + ("-odbc" if odbc else ""), database, odbc)
+                    for database in verify.DATABASES for odbc in (False, True)]
+        if compact:
+            packages = [("mysql", "mysql", False), ("pgsql", "pgsql", False),
+                        ("odbc", "odbc", True), ("sqlite-mysql-pgsql-odbc", "sqlite-mysql-pgsql", True)]
         for php in php_versions:
             full = full_versions[php]
-            for platform in verify.PLATFORMS:
-                for database in verify.DATABASES:
-                    for odbc in (False, True):
-                        variant = f"{platform}-{database}" + ("-odbc" if odbc else "")
-                        name = f"swoole-cli-php{php}-{variant}"
-                        meta = f"build-meta-php{php}-{variant}.json"
-                        if version == "v6.2.3.2":
-                            meta = f"build-meta-{variant}.json"
-                        (dist / name).write_bytes(name.encode())
-                        digest = verify.sha256(dist / name)
-                        drivers = database.split("-")
-                        item = {
-                            "platform": platform, "variant": variant, "asset": name,
-                            "metadata_asset": meta, "database_variant": database,
-                            "php_version": php, "php_full_version": full,
-                            "cli_version": version, "swoole_version": "6.2.3",
-                            "profile": "hyperfadmin-odbc" if odbc else "hyperfadmin-slim",
-                            "required_pdo_drivers": ",".join(drivers + (["odbc"] if odbc else [])),
-                            "extensions": ",".join(f"pdo_{d}" for d in drivers),
-                            "required_extensions": ",".join(f"pdo_{d}" for d in drivers),
-                            "forbidden_extensions": ",".join(
-                                ["mysqli", "pgsql", "sqlite3"] +
-                                [f"pdo_{d}" for d in ("mysql", "pgsql", "sqlite") if d not in drivers]),
-                            "swoole_odbc": odbc,
-                            "odbc_dynamic_dependency": (
-                                "libodbc.so.2" if platform.startswith("linux") else "libodbc.2.dylib"
-                            ) if odbc else "",
-                            "sha256": digest,
-                        }
-                        (dist / meta).write_text(json.dumps(item))
-                        items.append(item)
-                        checksums.append(f"{digest}  {name}\n")
+            for platform in platforms:
+                for suffix, database, odbc in packages:
+                    variant = f"{platform}-{suffix}"
+                    name = f"swoole-cli-php{php}-{variant}"
+                    meta = f"build-meta-php{php}-{variant}.json"
+                    if version == "v6.2.3.2":
+                        meta = f"build-meta-{variant}.json"
+                    (dist / name).write_bytes(name.encode())
+                    digest = verify.sha256(dist / name)
+                    drivers = [] if database == "odbc" else database.split("-")
+                    item = {
+                        "platform": platform, "variant": variant, "asset": name,
+                        "metadata_asset": "build-meta.json" if compact else meta, "database_variant": database,
+                        "php_version": php, "php_full_version": full,
+                        "cli_version": version, "swoole_version": "6.2.3",
+                        "profile": "hyperfadmin-odbc" if odbc else "hyperfadmin-slim",
+                        "required_pdo_drivers": ",".join(drivers + (["odbc"] if odbc else [])),
+                        "extensions": ",".join(f"pdo_{d}" for d in drivers),
+                        "required_extensions": ",".join(f"pdo_{d}" for d in drivers),
+                        "forbidden_extensions": ",".join(
+                            ["mysqli", "pgsql", "sqlite3"] +
+                            [f"pdo_{d}" for d in ("mysql", "pgsql", "sqlite") if d not in drivers]),
+                        "swoole_odbc": odbc,
+                        "odbc_dynamic_dependency": (
+                            "libodbc.so.2" if platform.startswith("linux") else "libodbc.2.dylib"
+                        ) if odbc else "",
+                        "sha256": digest,
+                    }
+                    (dist / meta).write_text(json.dumps(item))
+                    items.append(item)
+                    checksums.append(f"{digest}  {name}\n")
         summary = {"version": version, "php_versions": sorted(php_versions),
-                   "cli_versions": [version], "database_variants": sorted(verify.DATABASES),
+                   "cli_versions": [version], "database_variants": sorted({p[1] for p in packages}),
                    "php_full_versions": sorted(full_versions[p] for p in php_versions), "platforms": items}
         (dist / "build-meta.json").write_text(json.dumps(summary))
         (dist / "SHA256SUMS").write_text("".join(checksums))
         return dist, summary
+
+    def test_compact_release_has_24_binaries_and_two_shared_assets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dist, _ = self.make_dist(directory, version="v6.2.3.4")
+            env = {**os.environ, "PHPSFX_RELEASE_VERSION": "v6.2.3.4"}
+            result = subprocess.run(["python3", str(SCRIPT.with_name("merge-build-meta.py")),
+                                     str(dist), str(dist / "build-meta.json")],
+                                    env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            expected = verify.expected_assets(dist, "v6.2.3.4")
+            self.assertEqual(len(expected), 26)
+            self.assertEqual(sum(name.startswith("swoole-cli-php") for name in expected), 24)
+            self.assertFalse(any(name.startswith("build-meta-") for name in expected))
+            for path in dist.glob("build-meta-*.json"):
+                path.unlink()
+            self.assertEqual(verify.expected_assets(dist, "v6.2.3.4"), expected)
+
+    def test_compact_odbc_only_rejects_extra_database_driver(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dist, summary = self.make_dist(directory, version="v6.2.3.4")
+            item = next(item for item in summary["platforms"] if item["database_variant"] == "odbc")
+            item["required_pdo_drivers"] = "mysql,odbc"
+            (dist / f"build-meta-php{item['php_version']}-{item['variant']}.json").write_text(json.dumps(item))
+            (dist / "build-meta.json").write_text(json.dumps(summary))
+            with self.assertRaises(AssertionError):
+                verify.expected_assets(dist, "v6.2.3.4")
+
+    def test_compact_rejects_binary_outside_release_matrix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dist, _ = self.make_dist(directory, version="v6.2.3.4")
+            (dist / "swoole-cli-php8.5-macos-x64-mysql").write_bytes(b"extra")
+            with self.assertRaises(AssertionError):
+                verify.expected_assets(dist, "v6.2.3.4")
 
     def test_two_php_lines_keep_matching_variants_separate(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -99,11 +138,13 @@ class ReleaseAssetTests(unittest.TestCase):
                 verify.expected_assets(dist, "v6.2.3.3")
 
     def test_single_line_dispatch_and_legacy_assets_still_validate(self):
-        for version, php in (("v6.2.3.3", "8.4"), ("v6.2.3.3", "8.5"), ("v6.2.3.2", "8.5")):
+        for version, php in (("v6.2.3.4", "8.4"), ("v6.2.3.4", "8.5"),
+                             ("v6.2.3.3", "8.4"), ("v6.2.3.3", "8.5"), ("v6.2.3.2", "8.5")):
             with self.subTest(version=version, php=php), tempfile.TemporaryDirectory() as directory:
                 dist, _ = self.make_dist(directory, (php,), version)
-                selected = (php,) if version == "v6.2.3.3" else None
-                self.assertEqual(len(verify.expected_assets(dist, version, selected)), 114)
+                selected = (php,) if version != "v6.2.3.2" else None
+                self.assertEqual(len(verify.expected_assets(dist, version, selected)),
+                                 14 if version == "v6.2.3.4" else 114)
 
     def test_merge_rejects_duplicate_build_within_one_php_line(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -69,11 +69,11 @@ Important environment variables:
   PHPSFX_EXPECTED_SWOOLE_VERSION     Exact runtime Swoole version; inferred from numeric source tags
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
   PHPSFX_REQUIRED_EXTENSIONS         Comma-separated runtime extensions checked after build
-  PHPSFX_REQUIRED_PDO_DRIVERS        Comma-separated PDO drivers checked after build, default: mysql,pgsql,sqlite
+  PHPSFX_REQUIRED_PDO_DRIVERS        Exact PDO driver set checked after build, selected by profile
   PHPSFX_FORBIDDEN_EXTENSIONS        Comma-separated extensions that must not be loaded
   PHPSFX_ALLOW_EXTRA_EXTENSIONS      Set to 1 to skip forbidden-extension checks for local full-runtime smoke
   PHPSFX_PROFILE_FILE                Profile env file, default: scripts/profiles/hyperfadmin-slim.env
-  PHPSFX_DB_VARIANT                 PDO combination: sqlite, mysql, pgsql, mysql-pgsql, pgsql-sqlite, mysql-sqlite, mysql-pgsql-sqlite
+  PHPSFX_DB_VARIANT                 Release PDO selection: mysql (default), pgsql, odbc, sqlite-mysql-pgsql
   PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS Comma-separated prepare.php default extension list override
   PHPSFX_SWOOLE_SLIM_EXTENSION       Set to 1 to trim optional Swoole extension features, default from profile: 1
   PHPSFX_CURL_SLIM_LIBRARY           Set to 1 to trim optional libcurl features, default from profile: 1
@@ -1261,10 +1261,10 @@ cat > "${DIST_DIR}/${METADATA_ASSET}" <<META
   "platform": "${PLATFORM}",
   "variant": "${PLATFORM}${ASSET_SUFFIX_PART}",
   "asset": "${ASSET_NAME}",
-  "metadata_asset": "${METADATA_ASSET}",
+  "metadata_asset": "build-meta.json",
   "profile": "${PROFILE_NAME}",
   "database_variant": "${DB_VARIANT}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.3}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.4}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",

@@ -2,16 +2,15 @@
 
 本文说明 `phpsfx` 通用 ODBC 运行时的选择、安装、配置、开发和验收方法，覆盖常见国际数据库以及达梦、人大金仓、openGauss/GaussDB、OceanBase、GBase、神通、瀚高、Vastbase、TiDB、GoldenDB 等国产数据库接入路线。
 
-适用 Release 文件（以下为三数据库全量组合，其余组合把 `mysql-pgsql-sqlite` 换成 `sqlite`、`mysql`、`pgsql`、`mysql-pgsql`、`mysql-sqlite` 或 `pgsql-sqlite`）：
+适用 Release 文件（以下为 ODBC-only 线上包，开发全量包把后缀 `-odbc` 换成 `-sqlite-mysql-pgsql-odbc`）：
 
-- `swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite-odbc`
-- `swoole-cli-php8.5-linux-a64-mysql-pgsql-sqlite-odbc`
-- `swoole-cli-php8.5-macos-x64-mysql-pgsql-sqlite-odbc`
-- `swoole-cli-php8.5-macos-a64-mysql-pgsql-sqlite-odbc`
+- `swoole-cli-php8.5-linux-x64-odbc`
+- `swoole-cli-php8.5-linux-a64-odbc`
+- `swoole-cli-php8.5-macos-a64-odbc`
 
-从 `v6.2.3.3` 起同时发布 PHP 8.4.27 和 8.5.12；上面的 PHP 8.5 文件均有对应的 `php8.4` 版本。下载脚本默认 8.5，设置 `PHPSFX_PHP_VERSION=8.4` 可选择 8.4。每份元数据也包含 PHP 版本，例如 `build-meta-php8.4-linux-x64-mysql-pgsql-sqlite-odbc.json`。
+从 `v6.2.3.3` 起同时发布 PHP 8.4.27 和 8.5.12；从 `v6.2.3.4` 起收敛为三个平台、四种用途，上面的 PHP 8.5 文件均有对应的 `php8.4` 版本。下载脚本默认 8.5，设置 `PHPSFX_PHP_VERSION=8.4` 可选择 8.4。所有构建元数据按 `php_version + variant` 汇总到 `build-meta.json`；24 个二进制加元数据、`SHA256SUMS` 共 26 个资产。
 
-不使用 ODBC 时请选择不带 `-odbc` 的对应组合产物。数据库组合仅加载选定的 PDO 驱动；无 SQLite 的产物不含 `pdo_sqlite` 及其 SQLite 客户端库。不加载 PHP `mysqli`、原生 `pgsql` 或 `SQLite3` 扩展，普通版进程启动不依赖 unixODBC。
+不使用 ODBC 时请选择 `-mysql` 或 `-pgsql` 线上包。`-odbc` 线上包的 PDO 驱动集合严格为 `odbc`，不含 `pdo_mysql`、`pdo_pgsql`、`pdo_sqlite`、libpq 或 SQLite 客户端库。开发包包含 SQLite、MySQL、PostgreSQL、ODBC 四种 PDO 驱动。所有包均不加载 PHP `mysqli`、原生 `pgsql` 或 `SQLite3` 扩展；MySQL、PostgreSQL 线上包启动不依赖 unixODBC。
 
 ## 1. 能力与责任边界
 
@@ -38,7 +37,7 @@ Release 不包含：
 | unixODBC Driver Manager | `-odbc` 进程启动时 | 部署系统或 Homebrew |
 | 数据库厂商 ODBC 驱动 | 实际连接对应数据库时 | 数据库厂商或操作系统仓库 |
 
-因此，厂商驱动是按数据库可选的，但 unixODBC 对 `-odbc` 产物不是延迟依赖。只使用 MySQL 且不希望安装 unixODBC 时，可下载 `mysql` 普通版；需要 SQLite 时选择 `mysql-sqlite`。
+因此，厂商驱动是按数据库可选的，但 unixODBC 对 `-odbc` 产物不是延迟依赖。只使用 MySQL 且不希望安装 unixODBC 时，可下载 `mysql` 线上包；需要内置 SQLite 时选择 `sqlite-mysql-pgsql-odbc` 开发包，并安装 unixODBC。
 
 ## 2. 选择平台和架构
 
@@ -46,10 +45,11 @@ Release 不包含：
 
 | 目标环境 | Release 平台 | Driver Manager 动态库 | 厂商驱动格式 |
 |----------|--------------|------------------------|--------------|
-| Linux x86_64 | `linux-x64-<组合>-odbc` | `libodbc.so.2` | x86_64 ELF `.so` |
-| Linux ARM64 | `linux-a64-<组合>-odbc` | `libodbc.so.2` | ARM64 ELF `.so` |
-| macOS Intel | `macos-x64-<组合>-odbc` | `libodbc.2.dylib` | Intel Mach-O `.dylib` |
-| macOS Apple Silicon | `macos-a64-<组合>-odbc` | `libodbc.2.dylib` | ARM64 Mach-O `.dylib` |
+| Linux x86_64 | `linux-x64-odbc` | `libodbc.so.2` | x86_64 ELF `.so` |
+| Linux ARM64 | `linux-a64-odbc` | `libodbc.so.2` | ARM64 ELF `.so` |
+| macOS Apple Silicon | `macos-a64-odbc` | `libodbc.2.dylib` | ARM64 Mach-O `.dylib` |
+
+macOS Intel 仅保留在旧 Release，可通过指定旧 tag 下载。
 
 Linux 厂商驱动不能复制到 macOS 使用，x86_64 驱动也不能由 ARM64 进程直接加载。macOS 运行时具备 ODBC 能力，不代表每个数据库厂商都提供 macOS 驱动；没有对应平台的厂商驱动就不能在该平台连接该数据库。
 

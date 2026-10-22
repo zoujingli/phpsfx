@@ -85,7 +85,7 @@ fi
 
 PHPSFX_EXPECTED_SWOOLE_VERSION="${EXPECTED_SWOOLE_VERSION}" \
 PHPSFX_EXPECT_ODBC_SMOKE="${EXPECT_ODBC_SMOKE}" \
-PHPSFX_EXPECT_SQLITE_SMOKE="$([[ "${PHPSFX_DB_VARIANT:-mysql-pgsql-sqlite}" == *sqlite* ]] && printf 1 || printf 0)" \
+PHPSFX_EXPECT_SQLITE_SMOKE="$([[ "${PHPSFX_DB_VARIANT:-mysql}" == *sqlite* ]] && printf 1 || printf 0)" \
   "${SWOOLE_CLI}" -r '
 $response = json_decode(file_get_contents($argv[1]), true, flags: JSON_THROW_ON_ERROR);
 $expectedVersion = ltrim(trim(getenv("PHPSFX_EXPECTED_SWOOLE_VERSION") ?: ""), "vV");

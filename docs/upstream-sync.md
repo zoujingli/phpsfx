@@ -36,6 +36,14 @@
 
 本地 macOS ARM64 已验证两条 PHP 线的普通/ODBC 全量组合，共四份代表包；精确 PHP/Swoole 版本、PDO 集合、SQLite 本地读写、PHP/Phar SFX 和 Hyperf 3.2 均通过。两个 ODBC 包另通过外部 SQLite ODBC 事务、中文、并发查询及 `libodbc.2.dylib` 动态依赖检查。两条 PHP 线的 OPcache 编译/缓存检查均通过；官方 OOM/Fiber 定向用例每条线 7 通过、1 因未打包 `zend_test` 跳过，不代表覆盖所有安全漏洞利用路径。28 种 Profile/下载兼容测试、7 项发布核验单测、`bash -n`、ShellCheck、actionlint、Composer 和 `git diff --check` 均通过。其余数据库组合和四平台的完整 112 项验收由本版本发布 CI 执行；未进行外部 MySQL、PostgreSQL 或厂商数据库连接验收。
 
+## v6.2.3.4 按线上与开发用途收敛
+
+固定源码和两条 PHP 精确版本沿用 v6.2.3.3。发布平台收敛为 Linux x86_64、Linux ARM64、macOS ARM64；每个平台、PHP 版本只发 `mysql`、`pgsql`、`odbc` 三种线上包和 `sqlite-mysql-pgsql-odbc` 开发全量包，共 24 个二进制。ODBC-only 线上包不包含 MySQL、PostgreSQL、SQLite PDO 驱动，不构建 libpq 或 SQLite 客户端库；开发包包含四种 PDO 驱动。Swoole mysqlnd、SFX/Phar、图片处理及 OPcache 能力沿用。
+
+所有平台元数据汇入 `build-meta.json`，Release 只上传 24 个二进制、汇总元数据、24 条记录的 `SHA256SUMS`，共 26 个资产。独立元数据仍保留在 Actions artifact；汇总中的 `metadata_asset` 统一指向 `build-meta.json`。发布前后严格检查两条 PHP 线各 12 个唯一身份、精确 PDO 集合、平台动态依赖及全部 SHA-256。新版本默认构建和无后缀下载选择 MySQL 线上包，生产下载推荐显式指定后缀；v6.2.3.0 至 v6.2.3.3 的下载规则仍按原布局处理，旧 tag 不移动。macOS Intel 和旧组合不进入新矩阵。
+
+本地 macOS ARM64 已完整构建两条 PHP 线的四种包，共八份；精确 PHP/Swoole 版本、PDO 驱动集合、未选扩展和依赖构建目标缺席、PHP/Phar SFX、Hyperf 3.2 均通过。两个开发包另通过本地 PDO SQLite 读写；四个 ODBC 线上及开发包另通过外部 SQLite ODBC 事务、中文、并发查询和 `libodbc.2.dylib` 动态依赖检查。八种 Profile、24 个文件名及旧版本下载兼容测试、10 项发布核验单测、`bash -n`、ShellCheck、actionlint、Composer 严格校验和 `git diff --check` 均通过。Linux 两个架构与完整 24 包的发布验收由本版本 CI 执行，跨平台发布结果以对应工作流、Release 元数据与分页资产核验为准；未进行外部 MySQL、PostgreSQL 或厂商数据库连接验收。
+
 ## 当前本地适配
 
 1. `scripts/build-swoole-cli.sh` 按 `PHPSFX_PHP_VERSION` 将基线的 `sapi/PHP-VERSION.conf` 切换为 `8.4.27` 或 `8.5.12`，调用基线的 `sync-source-code.php`，并确认 `main/php_version.h` 报告精确版本。同一版本线的 patch 更新也必须同步，不能只比较 `8.4` / `8.5` 前缀。
@@ -74,4 +82,4 @@ curl -fsSL https://www.php.net/releases/ | head
 - 本地 builder/profile/patch 的文件和原因；
 - `bash -n`、ShellCheck、actionlint、Composer、`git diff --check` 结果；
 - 至少一个原生构建平台的完整构建、SFX/Phar、PDO 和 Hyperf smoke 结果；
-- 两条 PHP 线、四平台十四组合 CI、`build-meta.json`、`SHA256SUMS` 和 112 个 Release 二进制、226 个资产的分页核对结果。
+- 两条 PHP 线、三平台四种用途 CI、`build-meta.json`、`SHA256SUMS` 和 24 个 Release 二进制、26 个资产的分页核对结果。

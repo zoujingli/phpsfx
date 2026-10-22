@@ -10,25 +10,23 @@ for php_version in 8.4 8.5; do
     8.4) php_full_version=8.4.27 ;;
     8.5) php_full_version=8.5.12 ;;
   esac
-  for database in sqlite mysql pgsql mysql-pgsql pgsql-sqlite mysql-sqlite mysql-pgsql-sqlite; do
-    case "${database}" in
-      sqlite) expected=sqlite ;;
+  for package in mysql pgsql odbc sqlite-mysql-pgsql-odbc; do
+    database=${package}
+    mode=slim
+    case "${package}" in
       mysql) expected=mysql ;;
       pgsql) expected=pgsql ;;
-      mysql-pgsql) expected=mysql,pgsql ;;
-      pgsql-sqlite) expected=pgsql,sqlite ;;
-      mysql-sqlite) expected=mysql,sqlite ;;
-      mysql-pgsql-sqlite) expected=mysql,pgsql,sqlite ;;
+      odbc) expected=odbc; mode=odbc ;;
+      sqlite-mysql-pgsql-odbc) database=sqlite-mysql-pgsql; expected=sqlite,mysql,pgsql,odbc; mode=odbc ;;
     esac
-    for mode in slim odbc; do
-      PHPSFX_PHP_VERSION="${php_version}" PHPSFX_PHP_FULL_VERSION='' PHPSFX_RELEASE_VERSION='' PHPSFX_DB_VARIANT="${database}" bash -c '
+    PHPSFX_PHP_VERSION="${php_version}" PHPSFX_PHP_FULL_VERSION='' PHPSFX_RELEASE_VERSION='' PHPSFX_DB_VARIANT="${database}" bash -c '
         set -Eeuo pipefail
         source "scripts/profiles/$1.env"
         expected=$2
-        [[ "${PHPSFX_ASSET_SUFFIX}" == "${PHPSFX_DB_VARIANT}$3" ]] || exit 1
-        [[ "${PHPSFX_REQUIRED_PDO_DRIVERS}" == "${expected}$4" ]] || exit 1
-        [[ "${PHPSFX_RELEASE_VERSION}" == v6.2.3.3 ]] || exit 1
-        [[ "${PHPSFX_PHP_FULL_VERSION}" == "$5" ]] || exit 1
+        [[ "${PHPSFX_ASSET_SUFFIX}" == "$3" ]] || exit 1
+        [[ "${PHPSFX_REQUIRED_PDO_DRIVERS}" == "${expected}" ]] || exit 1
+        [[ "${PHPSFX_RELEASE_VERSION}" == v6.2.3.4 ]] || exit 1
+        [[ "${PHPSFX_PHP_FULL_VERSION}" == "$4" ]] || exit 1
         for driver in mysql pgsql sqlite; do
           extension="pdo_${driver}"
           if [[ ",${expected}," == *",${driver},"* ]]; then
@@ -44,11 +42,20 @@ for php_version in 8.4 8.5; do
             [[ " ${PHPSFX_SWOOLE_CLI_PREPARE_FLAGS} " == *" -${extension} "* ]] || exit 1
           fi
         done
-      ' _ "hyperfadmin-${mode}" "${expected}" \
-        "$([[ "${mode}" == odbc ]] && printf '%s' -odbc)" \
-        "$([[ "${mode}" == odbc ]] && printf '%s' ,odbc)" "${php_full_version}"
-    done
+    ' _ "hyperfadmin-${mode}" "${expected}" "${package}" "${php_full_version}"
   done
+done
+
+for mode in slim odbc; do
+  expected=mysql
+  [[ "${mode}" != odbc ]] || expected=odbc
+  PHPSFX_DB_VARIANT='' PHPSFX_REQUIRED_PDO_DRIVERS='' PHPSFX_ASSET_SUFFIX='' PHPSFX_SWOOLE_ODBC=0 bash -c '
+    set -Eeuo pipefail
+    source "scripts/profiles/hyperfadmin-$1.env"
+    [[ "${PHPSFX_DB_VARIANT}" == "$2" ]] || exit 1
+    [[ "${PHPSFX_ASSET_SUFFIX}" == "$2" ]] || exit 1
+    [[ "${PHPSFX_REQUIRED_PDO_DRIVERS}" == "$2" ]] || exit 1
+  ' _ "${mode}" "${expected}"
 done
 
 TMP_DIR=$(mktemp -d)
@@ -78,14 +85,37 @@ check_download() {
 
 check_download linux-x64 v6.2.3.0 download/v6.2.3.0/swoole-cli-php8.5-linux-x64
 check_download linux-x64-odbc v6.2.3.0 download/v6.2.3.0/swoole-cli-php8.5-linux-x64-odbc
-check_download linux-x64 latest latest/download/swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite
+check_download linux-x64 v6.2.3.3 download/v6.2.3.3/swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite
 check_download linux-x64-odbc v6.2.3.1 download/v6.2.3.1/swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite-odbc
 check_download linux-x64 v6.2.3.2 download/v6.2.3.2/swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite
-check_download linux-x64 latest latest/download/swoole-cli-php8.4-linux-x64-mysql-pgsql-sqlite 8.4
+check_download linux-x64 v6.2.3.3 download/v6.2.3.3/swoole-cli-php8.4-linux-x64-mysql-pgsql-sqlite 8.4
+check_download linux-x64 latest latest/download/swoole-cli-php8.5-linux-x64-mysql
+check_download linux-x64-odbc latest latest/download/swoole-cli-php8.5-linux-x64-odbc
 check_download macos-a64-sqlite-odbc v6.2.3.3 download/v6.2.3.3/swoole-cli-php8.4-macos-a64-sqlite-odbc 8.4
 for database in sqlite mysql pgsql mysql-pgsql pgsql-sqlite mysql-sqlite mysql-pgsql-sqlite; do
-  check_download macos-a64-${database} latest latest/download/swoole-cli-php8.5-macos-a64-${database}
+  check_download macos-x64-${database} v6.2.3.3 download/v6.2.3.3/swoole-cli-php8.5-macos-x64-${database}
   check_download macos-a64-${database}-odbc v6.2.3.2 download/v6.2.3.2/swoole-cli-php8.5-macos-a64-${database}-odbc
+done
+for version in v6.2.3.0 v6.2.3.1 v6.2.3.2 v6.2.3.3; do
+  if bash scripts/download-release-asset.sh linux-x64-sqlite-mysql-pgsql-odbc "${version}" "${TMP_DIR}/binary" >/dev/null 2>&1; then
+    echo "Old release unexpectedly accepted the new development package: ${version}" >&2
+    exit 1
+  fi
+done
+
+for php_version in 8.4 8.5; do
+  for platform in linux-x64 linux-a64 macos-a64; do
+    for package in mysql pgsql odbc sqlite-mysql-pgsql-odbc; do
+      check_download "${platform}-${package}" latest "latest/download/swoole-cli-php${php_version}-${platform}-${package}" "${php_version}"
+      check_download "${platform}-${package}" v6.2.3.4 "download/v6.2.3.4/swoole-cli-php${php_version}-${platform}-${package}" "${php_version}"
+    done
+  done
+done
+for unavailable in macos-x64-mysql linux-x64-sqlite linux-x64-mysql-odbc linux-x64-mysql-pgsql-sqlite; do
+  if bash scripts/download-release-asset.sh "${unavailable}" latest "${TMP_DIR}/binary" >/dev/null 2>&1; then
+    echo "New release unexpectedly accepted ${unavailable}" >&2
+    exit 1
+  fi
 done
 for database in pgsql-sqlite mysql-sqlite mysql-pgsql-sqlite; do
   check_download linux-a64-${database} v6.2.3.1 download/v6.2.3.1/swoole-cli-php8.5-linux-a64-${database}
@@ -101,4 +131,4 @@ if bash scripts/download-release-asset.sh linux-x64-pgsql-sqlite v6.2.3.0 "${TMP
   exit 1
 fi
 
-printf '%s\n' 'Twenty-eight release profiles and download asset names passed'
+printf '%s\n' 'Eight release profiles, 24 binary names and legacy downloads passed'
