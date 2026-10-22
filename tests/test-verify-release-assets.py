@@ -22,14 +22,14 @@ class ReleaseAssetTests(unittest.TestCase):
         items = []
         checksums = []
         full_versions = {"8.4": "8.4.27", "8.5": "8.5.9" if version == "v6.2.3.2" else "8.5.12"}
-        compact = version in ("v6.2.3.4", "v6.2.3.5")
+        compact = version in ("v6.2.3.4", "v6.2.3.5", "v6.2.3.6")
         platforms = ("linux-x64", "linux-a64", "macos-a64") if compact else verify.PLATFORMS
         packages = [(database + ("-odbc" if odbc else ""), database, odbc)
                     for database in verify.DATABASES for odbc in (False, True)]
         if compact:
             packages = [("mysql", "mysql", False), ("pgsql", "pgsql", False),
                         ("odbc", "odbc", True), ("sqlite-mysql-pgsql-odbc", "sqlite-mysql-pgsql", True)]
-        if version == "v6.2.3.5":
+        if version in ("v6.2.3.5", "v6.2.3.6"):
             packages[-1] = ("sqlite-mysql-pgsql", "sqlite-mysql-pgsql", True)
         for php in php_versions:
             full = full_versions[php]
@@ -107,8 +107,8 @@ class ReleaseAssetTests(unittest.TestCase):
 
     def test_development_package_odbc_depends_on_platform(self):
         with tempfile.TemporaryDirectory() as directory:
-            dist, summary = self.make_dist(directory, version="v6.2.3.5")
-            self.assertEqual(len(verify.expected_assets(dist, "v6.2.3.5")), 26)
+            dist, summary = self.make_dist(directory, version="v6.2.3.6")
+            self.assertEqual(len(verify.expected_assets(dist, "v6.2.3.6")), 26)
             for item in summary["platforms"]:
                 if item["database_variant"] == "sqlite-mysql-pgsql":
                     self.assertFalse(item["asset"].endswith("-odbc"))
@@ -119,8 +119,8 @@ class ReleaseAssetTests(unittest.TestCase):
     def test_rejects_wrong_development_package_odbc_for_platform(self):
         for platform in ("linux-x64", "linux-a64", "macos-a64"):
             with self.subTest(platform=platform), tempfile.TemporaryDirectory() as directory:
-                dist, summary = self.make_dist(directory, version="v6.2.3.5")
-                verify.expected_assets(dist, "v6.2.3.5")
+                dist, summary = self.make_dist(directory, version="v6.2.3.6")
+                verify.expected_assets(dist, "v6.2.3.6")
                 item = next(i for i in summary["platforms"] if i["platform"] == platform and i["database_variant"] == "sqlite-mysql-pgsql")
                 item["swoole_odbc"] = not item["swoole_odbc"]
                 item["profile"] = "hyperfadmin-odbc" if item["swoole_odbc"] else "hyperfadmin-slim"
@@ -131,7 +131,7 @@ class ReleaseAssetTests(unittest.TestCase):
                 (dist / f"build-meta-php{item['php_version']}-{item['variant']}.json").write_text(json.dumps(item))
                 (dist / "build-meta.json").write_text(json.dumps(summary))
                 with self.assertRaises(AssertionError):
-                    verify.expected_assets(dist, "v6.2.3.5")
+                    verify.expected_assets(dist, "v6.2.3.6")
 
     def test_two_php_lines_keep_matching_variants_separate(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -169,14 +169,15 @@ class ReleaseAssetTests(unittest.TestCase):
                 verify.expected_assets(dist, "v6.2.3.3")
 
     def test_single_line_dispatch_and_legacy_assets_still_validate(self):
-        for version, php in (("v6.2.3.5", "8.4"), ("v6.2.3.5", "8.5"),
+        for version, php in (("v6.2.3.6", "8.4"), ("v6.2.3.6", "8.5"),
+                             ("v6.2.3.5", "8.4"), ("v6.2.3.5", "8.5"),
                              ("v6.2.3.4", "8.4"), ("v6.2.3.4", "8.5"),
                              ("v6.2.3.3", "8.4"), ("v6.2.3.3", "8.5"), ("v6.2.3.2", "8.5")):
             with self.subTest(version=version, php=php), tempfile.TemporaryDirectory() as directory:
                 dist, _ = self.make_dist(directory, (php,), version)
                 selected = (php,) if version != "v6.2.3.2" else None
                 self.assertEqual(len(verify.expected_assets(dist, version, selected)),
-                                 14 if version in ("v6.2.3.4", "v6.2.3.5") else 114)
+                                 14 if version in ("v6.2.3.4", "v6.2.3.5", "v6.2.3.6") else 114)
 
     def test_merge_rejects_duplicate_build_within_one_php_line(self):
         with tempfile.TemporaryDirectory() as directory:

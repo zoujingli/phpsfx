@@ -1,6 +1,6 @@
 # 自维护 Swoole CLI
 
-本仓库是自维护的 `swoole-cli` 发行源码和构建仓库，当前构建版本为 `v6.2.3.5`。Release 同时发布 PHP `8.4.27`、`8.5.12` 两条版本线，Swoole 均为 `6.2.3`，并保留把 PHP 入口或 Phar 追加进运行时的单文件能力。两条 PHP 版本线均包含 CVE-2026-109618、CVE-2026-109619 的安全修复；已打包的单文件应用需要使用新运行时重新打包。官方仓库只作为固定基线和实现参考；同步记录见 [docs/upstream-sync.md](docs/upstream-sync.md)。
+本仓库是自维护的 `swoole-cli` 发行源码和构建仓库，当前构建版本为 `v6.2.3.6`。Release 同时发布 PHP `8.4.27`、`8.5.12` 两条版本线，Swoole 均为 `6.2.3`，并保留把 PHP 入口或 Phar 追加进运行时的单文件能力。两条 PHP 版本线均包含 CVE-2026-109618、CVE-2026-109619 的安全修复；已打包的单文件应用需要使用新运行时重新打包。官方仓库只作为固定基线和实现参考；同步记录见 [docs/upstream-sync.md](docs/upstream-sync.md)。
 
 两条 PHP 版本线在 Linux x86_64、Linux ARM64、macOS ARM64 三个平台各提供 `mysql`、`pgsql`、`odbc` 三种线上包，以及 `sqlite-mysql-pgsql` 开发包，合计 24 个二进制。开发包在 Linux 启用 PDO ODBC 和 Swoole 协程 ODBC，在 macOS 禁用 ODBC；三个平台均保留独立 ODBC 线上包。具备 ODBC 能力的包动态依赖部署机的 unixODBC，厂商驱动、DSN、客户端依赖和凭据由部署环境提供。
 
@@ -82,8 +82,8 @@ GitHub Actions workflow：`.github/workflows/release.yml`。
 示例：
 
 ```bash
-git tag v6.2.3.5
-git push origin swoole-cli v6.2.3.5
+git tag v6.2.3.6
+git push origin swoole-cli v6.2.3.6
 ```
 
 默认上游源码：
@@ -284,7 +284,7 @@ bash scripts/download-release-asset.sh linux-x64-pgsql-sqlite v6.2.3.1 /tmp/swoo
 下载不同组合或 ODBC 产物：
 
 ```bash
-bash scripts/download-release-asset.sh linux-x64-mysql v6.2.3.5 /tmp/swoole-cli-mysql
+bash scripts/download-release-asset.sh linux-x64-mysql v6.2.3.6 /tmp/swoole-cli-mysql
 bash scripts/download-release-asset.sh linux-a64-pgsql latest /tmp/swoole-cli-pgsql
 bash scripts/download-release-asset.sh linux-x64-odbc latest /tmp/swoole-cli-odbc
 bash scripts/download-release-asset.sh macos-a64-sqlite-mysql-pgsql latest /tmp/swoole-cli-dev

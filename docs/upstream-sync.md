@@ -50,6 +50,14 @@
 
 截至 2026-10-22，PHP 官方发布接口确认两条线最新版本仍为 8.4.27 和 8.5.12。本次在 macOS ARM64 完整重建这两条 PHP 线的开发包，均通过精确版本、三种 PDO 驱动、无 unixODBC 动态依赖、SQLite 本地读写、PHP/Phar SFX 和 Hyperf 3.2 检查。24 项发行配置与旧版本下载兼容、12 项发布核验单测、`bash -n`、ShellCheck、actionlint、Composer 严格校验和 `git diff --check` 均通过；平台 ODBC 新回归已先观察旧实现失败，再验证修正后通过。三个线上包能力沿用前次验证，本次未重复完整构建全部八个 macOS 包；Linux 开发包及完整 24 包的实际发布结果以新版本 CI 和 Release 核验为准，未验收外部 MySQL、PostgreSQL 或厂商数据库连接。
 
+## v6.2.3.6 发行检查隔离 ODBC 作业环境
+
+v6.2.3.5 的 ODBC 作业在运行全部发行配置检查时，将当前作业的 `PHPSFX_SWOOLE_ODBC=1` 传入普通 Profile 用例，导致测试在构建前误失败。单变量复现命令 `PHPSFX_SWOOLE_ODBC=1 bash tests/test-release-variants.sh` 已观察失败；每个配置用例先显式关闭 ODBC，再由所选 ODBC Profile 启用，修正后同一命令通过。该修复只涉及测试隔离和发行版本默认值，24 包矩阵、平台能力边界、PHP/Swoole 与固定依赖输入沿用 v6.2.3.5，旧 tag 不移动。
+
+另一个 Linux ARM64 PostgreSQL 作业在下载 giflib 时连续三次 SSL 连接超时，原 SourceForge 链接随后已恢复 HTTP 200；保留原依赖 URL 和内容校验，不将该瞬时失败归因于源码或包配置。新 tag 的 CI 重新验证完整矩阵，实际发布与资产结果以该运行及分页核验为准。
+
+普通环境及 ODBC 作业环境下的 24 项发行配置/旧下载兼容检查均通过，12 项发布核验单测、`bash -n`、ShellCheck、actionlint、Composer 严格校验和 `git diff --check` 通过。运行时构建输入没有改动，本次未重复本地编译，复用前述 v6.2.3.4 线上包及 v6.2.3.5 macOS 开发包的实际验证；完整 24 包仍须由新版本 CI 和 Release 核验验收，未验收外部 MySQL、PostgreSQL 或厂商数据库。
+
 ## 当前本地适配
 
 1. `scripts/build-swoole-cli.sh` 按 `PHPSFX_PHP_VERSION` 将基线的 `sapi/PHP-VERSION.conf` 切换为 `8.4.27` 或 `8.5.12`，调用基线的 `sync-source-code.php`，并确认 `main/php_version.h` 报告精确版本。同一版本线的 patch 更新也必须同步，不能只比较 `8.4` / `8.5` 前缀。
