@@ -24,7 +24,7 @@ RELEASE_PACKAGES = (
     ("mysql", "mysql", False),
     ("pgsql", "pgsql", False),
     ("odbc", "odbc", True),
-    ("sqlite-mysql-pgsql-odbc", "sqlite-mysql-pgsql", True),
+    ("sqlite-mysql-pgsql", "sqlite-mysql-pgsql", True),
 )
 
 
@@ -50,7 +50,11 @@ def expected_assets(dist: Path, version: str, php_versions: tuple[str, ...] | No
         (database + ("-odbc" if odbc else ""), database, odbc)
         for database in DATABASES for odbc in (False, True)
     )
-    variants = {f"{platform}-{suffix}": (platform, database, odbc)
+    if version == "v6.2.3.4":
+        packages = packages[:-1] + (("sqlite-mysql-pgsql-odbc", "sqlite-mysql-pgsql", True),)
+    variants = {f"{platform}-{suffix}": (
+                    platform, database,
+                    odbc and not (platform == "macos-a64" and suffix == "sqlite-mysql-pgsql"))
                 for platform in platforms for suffix, database, odbc in packages}
     identities = {(php, variant) for php in php_versions for variant in variants}
     count = len(identities)
@@ -169,7 +173,9 @@ def check_public_links(assets: list[dict]) -> None:
         "macos-x64-pgsql", "macos-a64-mysql-pgsql-sqlite-odbc",
     )
     by_name = {asset["name"]: asset for asset in assets}
-    if any(name.endswith("-sqlite-mysql-pgsql-odbc") for name in by_name):
+    if any(name.endswith("-sqlite-mysql-pgsql") for name in by_name):
+        variants = ("linux-x64-mysql", "linux-a64-sqlite-mysql-pgsql", "macos-a64-sqlite-mysql-pgsql")
+    elif any(name.endswith("-sqlite-mysql-pgsql-odbc") for name in by_name):
         variants = ("linux-x64-mysql", "linux-a64-odbc", "macos-a64-sqlite-mysql-pgsql-odbc")
     php_versions = {name.split("-php", 1)[1].split("-", 1)[0] for name in by_name if name.startswith("swoole-cli-php")}
     samples = ["SHA256SUMS", "build-meta.json"] + [

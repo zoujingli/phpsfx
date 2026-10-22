@@ -6,13 +6,13 @@ if [[ $# -lt 1 || $# -gt 3 ]]; then
   cat >&2 <<'USAGE'
 Usage: scripts/download-release-asset.sh <platform>[-<package>] [version] [output-file]
 
-Current packages: mysql (default), pgsql, odbc, sqlite-mysql-pgsql-odbc
+Current packages: mysql (default), pgsql, odbc, sqlite-mysql-pgsql
 Current platforms: linux-x64, linux-a64, macos-a64
 
 Examples:
   scripts/download-release-asset.sh linux-x64 latest /tmp/swoole-cli
   scripts/download-release-asset.sh linux-x64-odbc latest /tmp/swoole-cli-odbc
-  scripts/download-release-asset.sh macos-a64-sqlite-mysql-pgsql-odbc latest /tmp/swoole-cli-dev
+  scripts/download-release-asset.sh macos-a64-sqlite-mysql-pgsql latest /tmp/swoole-cli-dev
   scripts/download-release-asset.sh linux-a64-mysql-sqlite v6.2.3.1 /tmp/swoole-cli-arm64
   scripts/download-release-asset.sh linux-a64-sqlite v6.2.3.2 /tmp/swoole-cli-sqlite
   scripts/download-release-asset.sh macos-a64-odbc v6.2.3.0 ./swoole-cli-old-odbc
@@ -43,7 +43,7 @@ fi
 
 asset_generation=0
 if [[ "${VERSION}" == latest ]]; then
-  asset_generation=3
+  asset_generation=4
 elif [[ "${VERSION}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
   major=${BASH_REMATCH[1]}
   minor=${BASH_REMATCH[2]}
@@ -52,9 +52,11 @@ elif [[ "${VERSION}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
   if (( 10#${major} > 6 ||
         (10#${major} == 6 && 10#${minor} > 2) ||
         (10#${major} == 6 && 10#${minor} == 2 && 10#${patch} > 3) )); then
-    asset_generation=3
+    asset_generation=4
   elif (( 10#${major} == 6 && 10#${minor} == 2 && 10#${patch} == 3 )); then
-    if (( 10#${revision} >= 4 )); then
+    if (( 10#${revision} >= 5 )); then
+      asset_generation=4
+    elif (( 10#${revision} == 4 )); then
       asset_generation=3
     elif (( 10#${revision} >= 2 )); then
       asset_generation=2
@@ -64,7 +66,7 @@ elif [[ "${VERSION}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
   fi
 fi
 
-if [[ "${asset_generation}" -eq 3 ]]; then
+if [[ "${asset_generation}" -ge 3 ]]; then
   if [[ "${platform_name}" == macos-x64 ]]; then
     echo "Version ${VERSION} only publishes macOS ARM64; use an older tag for Intel" >&2
     exit 2
@@ -73,10 +75,12 @@ if [[ "${asset_generation}" -eq 3 ]]; then
     PLATFORM="${platform_name}-mysql"
   fi
   package=${PLATFORM#"${platform_name}-"}
-  case "${package}" in
-    mysql|pgsql|odbc|sqlite-mysql-pgsql-odbc) ;;
-    *) echo "Version ${VERSION} has no ${package} package; choose mysql, pgsql, odbc or sqlite-mysql-pgsql-odbc" >&2; exit 2 ;;
-  esac
+  development_package=sqlite-mysql-pgsql
+  [[ "${asset_generation}" -ne 3 ]] || development_package+=-odbc
+  if [[ "${package}" != mysql && "${package}" != pgsql && "${package}" != odbc && "${package}" != "${development_package}" ]]; then
+    echo "Version ${VERSION} has no ${package} package; choose mysql, pgsql, odbc or ${development_package}" >&2
+    exit 2
+  fi
 elif [[ "${database}" == sqlite-mysql-pgsql ]]; then
   echo "Version ${VERSION} does not have the sqlite-mysql-pgsql-odbc development package" >&2
   exit 2

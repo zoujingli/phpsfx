@@ -44,6 +44,12 @@
 
 本地 macOS ARM64 已完整构建两条 PHP 线的四种包，共八份；精确 PHP/Swoole 版本、PDO 驱动集合、未选扩展和依赖构建目标缺席、PHP/Phar SFX、Hyperf 3.2 均通过。两个开发包另通过本地 PDO SQLite 读写；四个 ODBC 线上及开发包另通过外部 SQLite ODBC 事务、中文、并发查询和 `libodbc.2.dylib` 动态依赖检查。八种 Profile、24 个文件名及旧版本下载兼容测试、10 项发布核验单测、`bash -n`、ShellCheck、actionlint、Composer 严格校验和 `git diff --check` 均通过。Linux 两个架构与完整 24 包的发布验收由本版本 CI 执行，跨平台发布结果以对应工作流、Release 元数据与分页资产核验为准；未进行外部 MySQL、PostgreSQL 或厂商数据库连接验收。
 
+## v6.2.3.5 开发包名称与平台 ODBC 边界修正
+
+沿用固定上游输入、PHP 8.4.27 / 8.5.12 和 Swoole 6.2.3。开发包统一改名为 `sqlite-mysql-pgsql`，Linux 保留 PDO ODBC 和 Swoole 协程 ODBC，macOS 开发包只提供三个 PDO 驱动且不依赖 unixODBC；用户已确认三个平台的独立 `odbc` 线上包均保留，因此仍为 24 个二进制、26 个 Release 资产。元数据和下载规则按版本区分，v6.2.3.4 tag 不移动，尚未发布的旧流水线因方案被替代而取消。术语见根目录 `CONTEXT.md`，平台差异依据见 [ADR](adr/0001-development-package-odbc-by-platform.md)。
+
+截至 2026-10-22，PHP 官方发布接口确认两条线最新版本仍为 8.4.27 和 8.5.12。本次在 macOS ARM64 完整重建这两条 PHP 线的开发包，均通过精确版本、三种 PDO 驱动、无 unixODBC 动态依赖、SQLite 本地读写、PHP/Phar SFX 和 Hyperf 3.2 检查。24 项发行配置与旧版本下载兼容、12 项发布核验单测、`bash -n`、ShellCheck、actionlint、Composer 严格校验和 `git diff --check` 均通过；平台 ODBC 新回归已先观察旧实现失败，再验证修正后通过。三个线上包能力沿用前次验证，本次未重复完整构建全部八个 macOS 包；Linux 开发包及完整 24 包的实际发布结果以新版本 CI 和 Release 核验为准，未验收外部 MySQL、PostgreSQL 或厂商数据库连接。
+
 ## 当前本地适配
 
 1. `scripts/build-swoole-cli.sh` 按 `PHPSFX_PHP_VERSION` 将基线的 `sapi/PHP-VERSION.conf` 切换为 `8.4.27` 或 `8.5.12`，调用基线的 `sync-source-code.php`，并确认 `main/php_version.h` 报告精确版本。同一版本线的 patch 更新也必须同步，不能只比较 `8.4` / `8.5` 前缀。

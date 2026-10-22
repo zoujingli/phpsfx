@@ -5,7 +5,7 @@
 - `swoole-cli-php8.5-linux-x64-odbc`
 - `swoole-cli-php8.5-linux-a64-odbc`
 
-上面使用 PHP 8.5 的 ODBC-only 线上包；PHP 8.4 版本把文件名中的 `php8.5` 换成 `php8.4`，下载或构建时设置 `PHPSFX_PHP_VERSION=8.4`。从 `v6.2.3.4` 起线上包仅提供 ODBC PDO 驱动，不含 `pdo_mysql`、`pdo_pgsql`、`pdo_sqlite`、libpq 或 SQLite 客户端库。开发时可选 `-sqlite-mysql-pgsql-odbc` 全量包，达梦 ODBC 能力相同。所有构建元数据统一在 Release 的 `build-meta.json` 中按 PHP 版本及 variant 查找。
+上面使用 PHP 8.5 的 ODBC-only 线上包；PHP 8.4 版本把文件名中的 `php8.5` 换成 `php8.4`，下载或构建时设置 `PHPSFX_PHP_VERSION=8.4`。从 `v6.2.3.4` 起线上包仅提供 ODBC PDO 驱动，不含 `pdo_mysql`、`pdo_pgsql`、`pdo_sqlite`、libpq 或 SQLite 客户端库。从 `v6.2.3.5` 起，Linux 开发时可选 `-sqlite-mysql-pgsql` 包，ODBC 能力相同；同名 macOS 开发包不含 ODBC，macOS 需要 ODBC 时必须使用独立 `-odbc` 线上包。所有构建元数据统一在 Release 的 `build-meta.json` 中按 PHP 版本及 variant 查找。
 
 运行时只提供 PHP PDO ODBC 和 Swoole 协程 ODBC 能力。它不包含达梦客户端、许可证、数据库配置、DSN、账号或密码，也不证明智慧厨房业务 SQL、分页、迁移和 MySQL 方言已经兼容达梦。unixODBC 基础环境和其它厂商配置见 [ODBC 环境与常见数据库接入](odbc-runtime.md)。
 

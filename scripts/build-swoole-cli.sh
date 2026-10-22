@@ -1264,7 +1264,7 @@ cat > "${DIST_DIR}/${METADATA_ASSET}" <<META
   "metadata_asset": "build-meta.json",
   "profile": "${PROFILE_NAME}",
   "database_variant": "${DB_VARIANT}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.4}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.5}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",
