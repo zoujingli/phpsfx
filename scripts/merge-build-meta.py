@@ -30,10 +30,10 @@ def main() -> int:
         print(f"No build-meta-*.json files found in {dist}", file=sys.stderr)
         return 1
 
-    for key in ("variant", "asset"):
-        values = [str(item.get(key, "")) for item in platforms]
-        if "" in values or len(values) != len(set(values)):
-            print(f"Build metadata contains missing or duplicate {key} values", file=sys.stderr)
+    for keys in (("php_version", "variant"), ("asset",)):
+        values = [tuple(str(item.get(key, "")) for key in keys) for item in platforms]
+        if any("" in value for value in values) or len(values) != len(set(values)):
+            print(f"Build metadata contains missing or duplicate {'/'.join(keys)} values", file=sys.stderr)
             return 1
 
     first = platforms[0]

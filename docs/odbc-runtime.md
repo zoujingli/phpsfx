@@ -9,6 +9,8 @@
 - `swoole-cli-php8.5-macos-x64-mysql-pgsql-sqlite-odbc`
 - `swoole-cli-php8.5-macos-a64-mysql-pgsql-sqlite-odbc`
 
+从 `v6.2.3.3` 起同时发布 PHP 8.4.27 和 8.5.12；上面的 PHP 8.5 文件均有对应的 `php8.4` 版本。下载脚本默认 8.5，设置 `PHPSFX_PHP_VERSION=8.4` 可选择 8.4。每份元数据也包含 PHP 版本，例如 `build-meta-php8.4-linux-x64-mysql-pgsql-sqlite-odbc.json`。
+
 不使用 ODBC 时请选择不带 `-odbc` 的对应组合产物。数据库组合仅加载选定的 PDO 驱动；无 SQLite 的产物不含 `pdo_sqlite` 及其 SQLite 客户端库。不加载 PHP `mysqli`、原生 `pgsql` 或 `SQLite3` 扩展，普通版进程启动不依赖 unixODBC。
 
 ## 1. 能力与责任边界

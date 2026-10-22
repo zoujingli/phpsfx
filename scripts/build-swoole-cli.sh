@@ -16,7 +16,11 @@ fi
 
 PLATFORM=${1:-${PHPSFX_PLATFORM:-}}
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.5}
-PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.5.9}
+case "${PHP_VERSION}" in
+  8.4) PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.4.27} ;;
+  8.5) PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.5.12} ;;
+  *) echo "Unsupported PHPSFX_PHP_VERSION: ${PHP_VERSION}" >&2; exit 2 ;;
+esac
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
 # Official swoole-cli has no v6.2.3 release. Keep its v6.2.2.2 commit as the
 # auditable build baseline and apply the PHP 8.5/Swoole 6.2.3 changes locally.
@@ -57,8 +61,8 @@ Platforms:
   linux-x64, linux-a64, macos-x64, macos-a64
 
 Important environment variables:
-  PHPSFX_PHP_VERSION                 PHP version line used for asset name and validation, default: 8.5
-  PHPSFX_PHP_FULL_VERSION            Exact PHP release source/runtime version, default: 8.5.9
+  PHPSFX_PHP_VERSION                 PHP version line: 8.4 or 8.5, default: 8.5
+  PHPSFX_PHP_FULL_VERSION            Exact PHP release source/runtime version, defaults: 8.4.27 / 8.5.12
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
   PHPSFX_SWOOLE_CLI_REF              Swoole CLI baseline commit, default: f7903840c3e959612dac7d413205e1bdb0067029
   PHPSFX_SWOOLE_SRC_REF              swoole-src tag, branch, or commit, default: v6.2.3
@@ -218,7 +222,7 @@ if (file_put_contents($path, $contents) === false) {
   echo "Applied unixODBC include flags to Swoole configure probes" >&2
 }
 
-patch_swoole_623_php85_compat() {
+patch_swoole_623_sleep_compat() {
   local misc_file="${SWOOLE_CLI_DIR}/ext/swoole/src/core/misc.cc"
 
   if [[ ! -f "${misc_file}" ]] || ! grep -q 'sw_usleep(1000);' "${misc_file}"; then
@@ -245,7 +249,7 @@ if (file_put_contents($path, $contents) === false) {
     exit(1);
 }
 ' "${misc_file}"
-  echo "Applied Swoole 6.2.3 PHP 8.5 sleep compatibility patch" >&2
+  echo "Applied Swoole 6.2.3 sleep compatibility patch for PHP ${PHP_VERSION}" >&2
 }
 
 sha256_file() {
@@ -320,7 +324,7 @@ assert_target_php_version() {
     echo "PHPSFX_PHP_FULL_VERSION=${PHP_FULL_VERSION} must belong to PHP ${PHP_VERSION}.x" >&2
     exit 1
   fi
-  if [[ "${upstream_php_version}" != "${PHP_VERSION}."* ]]; then
+  if [[ "${upstream_php_version}" != "${PHP_FULL_VERSION}" ]]; then
     cat >&2 <<ERROR
 Swoole CLI ref ${SWOOLE_CLI_REF} baseline targets PHP ${upstream_php_version}; the local build target is ${PHP_FULL_VERSION}.
 ERROR
@@ -1141,11 +1145,13 @@ else
 fi
 assert_target_php_version
 sync_php_source
-patch_php85_opcache_registration
-patch_php85_opcache_module_stub
-prime_php85_core_extensions
+if [[ "${PHP_VERSION}" == 8.5 ]]; then
+  patch_php85_opcache_registration
+  patch_php85_opcache_module_stub
+  prime_php85_core_extensions
+fi
 prime_swoole_extension_archive
-patch_swoole_623_php85_compat
+patch_swoole_623_sleep_compat
 if [[ " ${PREPARE_FLAGS} " == *" +pdo_sqlite "* ]]; then
   prime_pdo_sqlite_extension_source
 fi
@@ -1249,14 +1255,16 @@ if [[ "${SWOOLE_ODBC_ENABLED}" == "1" ]]; then
 else
   SWOOLE_ODBC_JSON=false
 fi
-cat > "${DIST_DIR}/build-meta-${PLATFORM}${ASSET_SUFFIX_PART}.json" <<META
+METADATA_ASSET="build-meta-php${PHP_VERSION}-${PLATFORM}${ASSET_SUFFIX_PART}.json"
+cat > "${DIST_DIR}/${METADATA_ASSET}" <<META
 {
   "platform": "${PLATFORM}",
   "variant": "${PLATFORM}${ASSET_SUFFIX_PART}",
   "asset": "${ASSET_NAME}",
+  "metadata_asset": "${METADATA_ASSET}",
   "profile": "${PROFILE_NAME}",
   "database_variant": "${DB_VARIANT}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.2}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.3}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",

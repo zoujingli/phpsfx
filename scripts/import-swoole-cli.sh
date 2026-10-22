@@ -7,7 +7,7 @@ if [[ $# -lt 1 || $# -gt 2 ]]; then
 Usage: scripts/import-swoole-cli.sh [platform] <swoole-cli-binary>
 
 Import an already built Swoole CLI runtime into dist/ using the same phpsfx asset naming,
-then validate it and generate build-meta-<platform>-<combination>.json. This is intended for local smoke
+then validate it and generate build-meta-php<version>-<platform>-<combination>.json. This is intended for local smoke
 tests against the recommended upstream release when the runtime is already installed.
 
 Environment:
@@ -39,7 +39,11 @@ else
 fi
 
 PHP_VERSION=${PHPSFX_PHP_VERSION:-8.5}
-PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.5.9}
+case "${PHP_VERSION}" in
+  8.4) PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.4.27} ;;
+  8.5) PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.5.12} ;;
+  *) echo "Unsupported PHPSFX_PHP_VERSION: ${PHP_VERSION}" >&2; exit 2 ;;
+esac
 SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-f7903840c3e959612dac7d413205e1bdb0067029}
 SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.3}
 if [[ "${SWOOLE_SRC_REF}" =~ ^[0-9]+(\.[0-9]+)+([._-].*)?$ ]]; then
@@ -123,14 +127,16 @@ if [[ "${SWOOLE_ODBC_ENABLED}" == 1 ]]; then
 else
   SWOOLE_ODBC_JSON=false
 fi
-cat > "${DIST_DIR}/build-meta-${VARIANT}.json" <<META
+METADATA_ASSET="build-meta-php${PHP_VERSION}-${VARIANT}.json"
+cat > "${DIST_DIR}/${METADATA_ASSET}" <<META
 {
   "platform": "${PLATFORM}",
   "variant": "${VARIANT}",
   "asset": "${ASSET_NAME}",
+  "metadata_asset": "${METADATA_ASSET}",
   "profile": "${PROFILE_NAME}",
   "database_variant": "${DB_VARIANT}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.2}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.3}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",
@@ -155,9 +161,9 @@ META
 (
   cd "${DIST_DIR}"
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum swoole-cli-php"${PHP_VERSION}"-* > SHA256SUMS
+    sha256sum swoole-cli-php* > SHA256SUMS
   else
-    shasum -a 256 swoole-cli-php"${PHP_VERSION}"-* > SHA256SUMS
+    shasum -a 256 swoole-cli-php* > SHA256SUMS
   fi
 )
 PHPSFX_RELEASE_VERSION=${PHPSFX_RELEASE_VERSION:-local-smoke} \

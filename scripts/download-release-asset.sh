@@ -12,10 +12,11 @@ Examples:
   scripts/download-release-asset.sh linux-a64-mysql-sqlite v6.2.3.1 /tmp/swoole-cli-arm64
   scripts/download-release-asset.sh linux-a64-sqlite v6.2.3.2 /tmp/swoole-cli-sqlite
   scripts/download-release-asset.sh macos-a64-odbc v6.2.3.0 ./swoole-cli-old-odbc
+  PHPSFX_PHP_VERSION=8.4 scripts/download-release-asset.sh linux-x64-mysql v6.2.3.3 /tmp/swoole-cli-php84
 
 Environment:
   PHPSFX_RELEASE_REPO       GitHub repo, default: zoujingli/phpsfx
-  PHPSFX_PHP_VERSION        PHP version line, default: 8.5
+  PHPSFX_PHP_VERSION        PHP version line, default: 8.5; 8.4 also available from v6.2.3.3
   PHPSFX_ASSET_PREFIX       Release asset prefix, default: swoole-cli
 USAGE
   exit 2

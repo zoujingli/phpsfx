@@ -5,7 +5,7 @@
 - `swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite-odbc`
 - `swoole-cli-php8.5-linux-a64-mysql-pgsql-sqlite-odbc`
 
-上面使用三数据库全量组合；只需要部分 PDO 驱动时，可以改用相同平台的 `sqlite`、`mysql`、`pgsql`、`mysql-pgsql`、`pgsql-sqlite` 或 `mysql-sqlite` 组合的 `-odbc` 产物，达梦 ODBC 能力相同。无 SQLite 的组合不内置 `pdo_sqlite` 或 SQLite 客户端库；达梦 ODBC 连接不要求它们。
+上面使用 PHP 8.5 的三数据库全量组合；从 `v6.2.3.3` 起也提供相同组合的 `php8.4` 版本，下载或构建时设置 `PHPSFX_PHP_VERSION=8.4`。只需要部分 PDO 驱动时，可以改用相同平台的 `sqlite`、`mysql`、`pgsql`、`mysql-pgsql`、`pgsql-sqlite` 或 `mysql-sqlite` 组合的 `-odbc` 产物，达梦 ODBC 能力相同。无 SQLite 的组合不内置 `pdo_sqlite` 或 SQLite 客户端库；达梦 ODBC 连接不要求它们。
 
 运行时只提供 PHP PDO ODBC 和 Swoole 协程 ODBC 能力。它不包含达梦客户端、许可证、数据库配置、DSN、账号或密码，也不证明智慧厨房业务 SQL、分页、迁移和 MySQL 方言已经兼容达梦。unixODBC 基础环境和其它厂商配置见 [ODBC 环境与常见数据库接入](odbc-runtime.md)。
 
@@ -74,7 +74,7 @@ sudo apt-get install -y ca-certificates curl file unixodbc binutils netcat-openb
 sudo apt-get install -y unixodbc-dev
 ```
 
-全新 Ubuntu 构建机还必须安装 PHP 8.5 CLI、Composer 2，以及 `.github/workflows/release.yml` 中列出的编译工具链。仅安装 `unixodbc-dev` 不能完成源码构建。
+全新 Ubuntu 构建机还必须安装 PHP 8.4 或 8.5 CLI、Composer 2，以及 `.github/workflows/release.yml` 中列出的编译工具链。仅安装 `unixodbc-dev` 不能完成源码构建。
 
 ### RHEL / Rocky Linux / 麒麟常见仓库
 
@@ -111,7 +111,7 @@ command -v git make tar readelf
 test -f scripts/profiles/hyperfadmin-odbc.env
 ```
 
-系统 PHP 必须是 8.5，构建目标 PHP release 为 8.5.9；unixODBC 头文件默认必须位于 `/usr/include/sql.h` 和 `/usr/include/sqlext.h`。如果开发包安装在其它前缀，可通过 `PHPSFX_SWOOLE_ODBC_PREFIX` 指定绝对路径。
+默认目标为 PHP 8.5.12；设置 `PHPSFX_PHP_VERSION=8.4` 后目标为 8.4.27。CI 使用与目标版本线一致的系统 PHP；unixODBC 头文件默认必须位于 `/usr/include/sql.h` 和 `/usr/include/sqlext.h`。如果开发包安装在其它前缀，可通过 `PHPSFX_SWOOLE_ODBC_PREFIX` 指定绝对路径。
 
 x86_64 构建机执行：
 
@@ -131,10 +131,10 @@ PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
 
 ```text
 dist/swoole-cli-php8.5-linux-x64-mysql-pgsql-sqlite-odbc
-dist/build-meta-linux-x64-mysql-pgsql-sqlite-odbc.json
+dist/build-meta-php8.5-linux-x64-mysql-pgsql-sqlite-odbc.json
 
 dist/swoole-cli-php8.5-linux-a64-mysql-pgsql-sqlite-odbc
-dist/build-meta-linux-a64-mysql-pgsql-sqlite-odbc.json
+dist/build-meta-php8.5-linux-a64-mysql-pgsql-sqlite-odbc.json
 ```
 
 构建脚本会执行运行时能力校验，并要求元数据中的 `swoole_odbc` 为 `true`、`odbc_dynamic_dependency` 为 `libodbc.so.2`。构建过程中使用 `.build/swoole-cli` 工作目录；可用 `PHPSFX_DIST_DIR` 修改输出目录，但不要在 x86_64 和 ARM64 之间复用构建工作目录。

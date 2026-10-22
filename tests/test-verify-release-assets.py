@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
 import importlib.util
+import json
+import os
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -13,16 +17,115 @@ SPEC.loader.exec_module(verify)
 
 
 class ReleaseAssetTests(unittest.TestCase):
+    def make_dist(self, directory, php_versions=("8.4", "8.5"), version="v6.2.3.3"):
+        dist = Path(directory)
+        items = []
+        checksums = []
+        full_versions = {"8.4": "8.4.27", "8.5": "8.5.9" if version == "v6.2.3.2" else "8.5.12"}
+        for php in php_versions:
+            full = full_versions[php]
+            for platform in verify.PLATFORMS:
+                for database in verify.DATABASES:
+                    for odbc in (False, True):
+                        variant = f"{platform}-{database}" + ("-odbc" if odbc else "")
+                        name = f"swoole-cli-php{php}-{variant}"
+                        meta = f"build-meta-php{php}-{variant}.json"
+                        if version == "v6.2.3.2":
+                            meta = f"build-meta-{variant}.json"
+                        (dist / name).write_bytes(name.encode())
+                        digest = verify.sha256(dist / name)
+                        drivers = database.split("-")
+                        item = {
+                            "platform": platform, "variant": variant, "asset": name,
+                            "metadata_asset": meta, "database_variant": database,
+                            "php_version": php, "php_full_version": full,
+                            "cli_version": version, "swoole_version": "6.2.3",
+                            "profile": "hyperfadmin-odbc" if odbc else "hyperfadmin-slim",
+                            "required_pdo_drivers": ",".join(drivers + (["odbc"] if odbc else [])),
+                            "extensions": ",".join(f"pdo_{d}" for d in drivers),
+                            "required_extensions": ",".join(f"pdo_{d}" for d in drivers),
+                            "forbidden_extensions": ",".join(
+                                ["mysqli", "pgsql", "sqlite3"] +
+                                [f"pdo_{d}" for d in ("mysql", "pgsql", "sqlite") if d not in drivers]),
+                            "swoole_odbc": odbc,
+                            "odbc_dynamic_dependency": (
+                                "libodbc.so.2" if platform.startswith("linux") else "libodbc.2.dylib"
+                            ) if odbc else "",
+                            "sha256": digest,
+                        }
+                        (dist / meta).write_text(json.dumps(item))
+                        items.append(item)
+                        checksums.append(f"{digest}  {name}\n")
+        summary = {"version": version, "php_versions": sorted(php_versions),
+                   "cli_versions": [version], "database_variants": sorted(verify.DATABASES),
+                   "php_full_versions": sorted(full_versions[p] for p in php_versions), "platforms": items}
+        (dist / "build-meta.json").write_text(json.dumps(summary))
+        (dist / "SHA256SUMS").write_text("".join(checksums))
+        return dist, summary
+
+    def test_two_php_lines_keep_matching_variants_separate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dist, _ = self.make_dist(directory)
+            expected = verify.expected_assets(dist, "v6.2.3.3")
+            self.assertEqual(len(expected), 226)
+            env = {**os.environ, "PHPSFX_RELEASE_VERSION": "v6.2.3.3"}
+            result = subprocess.run(["python3", str(SCRIPT.with_name("merge-build-meta.py")),
+                                     str(dist), str(dist / "build-meta.json")],
+                                    env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(len(verify.expected_assets(dist, "v6.2.3.3")), 226)
+            result = subprocess.run(["python3", str(SCRIPT), "--local", "v6.2.3.3", str(dist)],
+                                    env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Verified 112 local binaries", result.stdout)
+
+    def test_rejects_missing_php_line_before_publication(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dist, summary = self.make_dist(directory)
+            summary["php_versions"] = ["8.5"]
+            summary["platforms"] = [i for i in summary["platforms"] if i["php_version"] == "8.5"]
+            (dist / "build-meta.json").write_text(json.dumps(summary))
+            with self.assertRaises(AssertionError):
+                verify.expected_assets(dist, "v6.2.3.3")
+
+    def test_rejects_wrong_database_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dist, summary = self.make_dist(directory)
+            item = summary["platforms"][0]
+            item["required_pdo_drivers"] = "mysql,sqlite"
+            (dist / item["metadata_asset"]).write_text(json.dumps(item))
+            (dist / "build-meta.json").write_text(json.dumps(summary))
+            with self.assertRaises(AssertionError):
+                verify.expected_assets(dist, "v6.2.3.3")
+
+    def test_single_line_dispatch_and_legacy_assets_still_validate(self):
+        for version, php in (("v6.2.3.3", "8.4"), ("v6.2.3.3", "8.5"), ("v6.2.3.2", "8.5")):
+            with self.subTest(version=version, php=php), tempfile.TemporaryDirectory() as directory:
+                dist, _ = self.make_dist(directory, (php,), version)
+                selected = (php,) if version == "v6.2.3.3" else None
+                self.assertEqual(len(verify.expected_assets(dist, version, selected)), 114)
+
+    def test_merge_rejects_duplicate_build_within_one_php_line(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dist, summary = self.make_dist(directory)
+            (dist / "build-meta-duplicate.json").write_text(json.dumps(summary["platforms"][0]))
+            result = subprocess.run(["python3", str(SCRIPT.with_name("merge-build-meta.py")),
+                                     str(dist), str(dist / "build-meta.json")],
+                                    capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("duplicate php_version/variant", result.stderr)
+
     def test_paginates_beyond_embedded_release_assets(self):
         pages = [
-            {"id": 17, "tag_name": "v6.2.3.2", "draft": False, "assets": []},
+            {"id": 17, "tag_name": "v6.2.3.3", "draft": False, "assets": []},
             [{"name": f"asset-{n}"} for n in range(100)],
-            [{"name": f"asset-{n}"} for n in range(100, 114)],
+            [{"name": f"asset-{n}"} for n in range(100, 200)],
+            [{"name": f"asset-{n}"} for n in range(200, 226)],
         ]
         with patch.object(verify, "get_json", side_effect=pages) as request:
-            assets = verify.release_assets("example/phpsfx", "v6.2.3.2")
-        self.assertEqual(len(assets), 114)
-        self.assertIn("page=2", request.call_args_list[-1].args[0])
+            assets = verify.release_assets("example/phpsfx", "v6.2.3.3")
+        self.assertEqual(len(assets), 226)
+        self.assertIn("page=3", request.call_args_list[-1].args[0])
 
     def test_rejects_mismatched_remote_digest_or_size(self):
         expected = {f"asset-{n}": (10, "a" * 64) for n in range(114)}
