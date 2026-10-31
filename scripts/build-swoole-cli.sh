@@ -22,10 +22,10 @@ case "${PHP_VERSION}" in
   *) echo "Unsupported PHPSFX_PHP_VERSION: ${PHP_VERSION}" >&2; exit 2 ;;
 esac
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
-# Official swoole-cli has no v6.2.3 release. Keep its v6.2.2.2 commit as the
-# auditable build baseline and apply the PHP 8.5/Swoole 6.2.3 changes locally.
-SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-f7903840c3e959612dac7d413205e1bdb0067029}
-SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.3}
+# Keep an immutable official build baseline and apply the selected PHP/Swoole
+# versions plus this repository's SFX and package profiles locally.
+SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-f70344b0b40231347504c995c6ce3f26ccce26a7}
+SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.4}
 EXPECTED_SWOOLE_VERSION=${PHPSFX_EXPECTED_SWOOLE_VERSION:-}
 EXPECTED_PHP_FULL_VERSION=${PHP_FULL_VERSION}
 if [[ -z "${EXPECTED_SWOOLE_VERSION}" && "${SWOOLE_SRC_REF}" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
@@ -64,8 +64,8 @@ Important environment variables:
   PHPSFX_PHP_VERSION                 PHP version line: 8.4 or 8.5, default: 8.5
   PHPSFX_PHP_FULL_VERSION            Exact PHP release source/runtime version, defaults: 8.4.27 / 8.5.12
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
-  PHPSFX_SWOOLE_CLI_REF              Swoole CLI baseline commit, default: f7903840c3e959612dac7d413205e1bdb0067029
-  PHPSFX_SWOOLE_SRC_REF              swoole-src tag, branch, or commit, default: v6.2.3
+  PHPSFX_SWOOLE_CLI_REF              Swoole CLI baseline commit, default: f70344b0b40231347504c995c6ce3f26ccce26a7
+  PHPSFX_SWOOLE_SRC_REF              swoole-src tag, branch, or commit, default: v6.2.4
   PHPSFX_EXPECTED_SWOOLE_VERSION     Exact runtime Swoole version; inferred from numeric source tags
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
   PHPSFX_REQUIRED_EXTENSIONS         Comma-separated runtime extensions checked after build
@@ -220,36 +220,6 @@ if (file_put_contents($path, $contents) === false) {
 }
 ' "${config_m4}"
   echo "Applied unixODBC include flags to Swoole configure probes" >&2
-}
-
-patch_swoole_623_sleep_compat() {
-  local misc_file="${SWOOLE_CLI_DIR}/ext/swoole/src/core/misc.cc"
-
-  if [[ ! -f "${misc_file}" ]] || ! grep -q 'sw_usleep(1000);' "${misc_file}"; then
-    return
-  fi
-
-  php -r '
-$path = $argv[1];
-$contents = file_get_contents($path);
-if ($contents === false) {
-    fwrite(STDERR, "Unable to read Swoole misc.cc\n");
-    exit(1);
-}
-$search = "        sw_usleep(1000);";
-$replacement = "        std::this_thread::sleep_for(std::chrono::microseconds(1000));";
-$count = substr_count($contents, $search);
-if ($count !== 1) {
-    fwrite(STDERR, sprintf("Expected one Swoole sw_usleep compatibility call, found %d\n", $count));
-    exit(1);
-}
-$contents = str_replace($search, $replacement, $contents);
-if (file_put_contents($path, $contents) === false) {
-    fwrite(STDERR, "Unable to update Swoole misc.cc\n");
-    exit(1);
-}
-' "${misc_file}"
-  echo "Applied Swoole 6.2.3 sleep compatibility patch for PHP ${PHP_VERSION}" >&2
 }
 
 sha256_file() {
@@ -567,7 +537,7 @@ prime_pdo_pgsql_extension_source() {
 }
 
 apply_profile_patches() {
-  local enabled_file pdo_sqlite_file pdo_pgsql_file pgsql_file swoole_file curl_file libiconv_file libzip_file zlib_file redis_file oniguruma_file prepare_file ext php_m4_file
+  local enabled_file pdo_sqlite_file pdo_pgsql_file pgsql_file swoole_file curl_file libzip_file zlib_file redis_file oniguruma_file prepare_file ext php_m4_file
 
   # The upstream baseline may pull phpx master for the optional SDK. This build
   # only generates swoole-cli,
@@ -636,30 +606,6 @@ M4;
     fwrite(STDERR, "Restored PHP_OUTPUT compatibility macro for SFX CLI\n");
 }
 ' "${php_m4_file}"
-
-  # ftpmirror.gnu.org 当前会在 GitHub runner 上持续返回 502；GNU 主站提供同一份
-  # libiconv 归档，后续仍由上游 builder 的 MD5 校验内容。
-  libiconv_file="${SWOOLE_CLI_DIR}/sapi/src/builder/library/libiconv.php"
-  php -r '
-$path = $argv[1];
-$contents = file_get_contents($path);
-if ($contents === false) {
-    fwrite(STDERR, "Unable to read libiconv builder\n");
-    exit(1);
-}
-$search = "https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.17.tar.gz";
-$replace = "https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.17.tar.gz";
-$count = substr_count($contents, $search);
-if ($count !== 1) {
-    fwrite(STDERR, sprintf("Expected one libiconv download URL, found %d\n", $count));
-    exit(1);
-}
-if (file_put_contents($path, str_replace($search, $replace, $contents)) === false) {
-    fwrite(STDERR, "Unable to update libiconv builder\n");
-    exit(1);
-}
-' "${libiconv_file}"
-  echo "Applied stable GNU libiconv download URL" >&2
 
   # Swoole CLI 上游默认启用 full profile；这里将默认启用列表改为 profile 明确声明的最小集合，
   # 防止 prepare.php 在解析依赖时下载 intl/imagick/mongodb 等未使用组件。
@@ -1151,7 +1097,6 @@ if [[ "${PHP_VERSION}" == 8.5 ]]; then
   prime_php85_core_extensions
 fi
 prime_swoole_extension_archive
-patch_swoole_623_sleep_compat
 if [[ " ${PREPARE_FLAGS} " == *" +pdo_sqlite "* ]]; then
   prime_pdo_sqlite_extension_source
 fi
@@ -1264,7 +1209,7 @@ cat > "${DIST_DIR}/${METADATA_ASSET}" <<META
   "metadata_asset": "build-meta.json",
   "profile": "${PROFILE_NAME}",
   "database_variant": "${DB_VARIANT}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.3.6}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.4.0}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",

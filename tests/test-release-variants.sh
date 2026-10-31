@@ -26,14 +26,16 @@ for php_version in 8.4 8.5; do
           fi
           ;;
       esac
-      # Each case selects its own profile; do not inherit the current CI job's ODBC mode.
-      PHPSFX_SWOOLE_ODBC=0 PHPSFX_PHP_VERSION="${php_version}" PHPSFX_PHP_FULL_VERSION='' PHPSFX_RELEASE_VERSION='' PHPSFX_DB_VARIANT="${database}" bash -c '
+      # Check profile defaults independently of the current CI job's build settings.
+      PHPSFX_SWOOLE_ODBC=0 PHPSFX_SWOOLE_CLI_REF='' PHPSFX_SWOOLE_SRC_REF='' PHPSFX_PHP_VERSION="${php_version}" PHPSFX_PHP_FULL_VERSION='' PHPSFX_RELEASE_VERSION='' PHPSFX_DB_VARIANT="${database}" bash -c '
         set -Eeuo pipefail
         source "scripts/profiles/$1.env"
         expected=$2
         [[ "${PHPSFX_ASSET_SUFFIX}" == "$3" ]] || exit 1
         [[ "${PHPSFX_REQUIRED_PDO_DRIVERS}" == "${expected}" ]] || exit 1
-        [[ "${PHPSFX_RELEASE_VERSION}" == v6.2.3.6 ]] || exit 1
+        [[ "${PHPSFX_RELEASE_VERSION}" == v6.2.4.0 ]] || exit 1
+        [[ "${PHPSFX_SWOOLE_CLI_REF}" == f70344b0b40231347504c995c6ce3f26ccce26a7 ]] || exit 1
+        [[ "${PHPSFX_SWOOLE_SRC_REF}" == v6.2.4 ]] || exit 1
         [[ "${PHPSFX_PHP_FULL_VERSION}" == "$4" ]] || exit 1
         [[ "${PHPSFX_SWOOLE_ODBC:-0}" == "$5" ]] || exit 1
         for driver in mysql pgsql sqlite; do
@@ -117,7 +119,7 @@ for php_version in 8.4 8.5; do
   for platform in linux-x64 linux-a64 macos-a64; do
     for package in mysql pgsql odbc sqlite-mysql-pgsql; do
       check_download "${platform}-${package}" latest "latest/download/swoole-cli-php${php_version}-${platform}-${package}" "${php_version}"
-      for version in v6.2.3.5 v6.2.3.6; do
+      for version in v6.2.3.5 v6.2.3.6 v6.2.4.0; do
         check_download "${platform}-${package}" "${version}" "download/${version}/swoole-cli-php${php_version}-${platform}-${package}" "${php_version}"
       done
     done

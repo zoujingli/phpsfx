@@ -58,6 +58,18 @@ v6.2.3.5 的 ODBC 作业在运行全部发行配置检查时，将当前作业�
 
 普通环境及 ODBC 作业环境下的 24 项发行配置/旧下载兼容检查均通过，12 项发布核验单测、`bash -n`、ShellCheck、actionlint、Composer 严格校验和 `git diff --check` 通过。运行时构建输入没有改动，本次未重复本地编译，复用前述 v6.2.3.4 线上包及 v6.2.3.5 macOS 开发包的实际验证；完整 24 包仍须由新版本 CI 和 Release 核验验收，未验收外部 MySQL、PostgreSQL 或厂商数据库。
 
+## v6.2.4.0 同步 Swoole 6.2.4
+
+2026-10-31 核对官方发布：最新稳定扩展为 [Swoole v6.2.4](https://github.com/swoole/swoole-src/releases/tag/v6.2.4)，对应 commit `c7e514509451beafd4d70ce5b78943d51e76381c`；`v6.3.0-rc1` 为候选版。官方 PHP release API 确认两条线最新版本仍为 8.4.27、8.5.12，继续沿用上表归档和校验值。Swoole v6.2.4 的 codeload 归档 SHA-256 为 `92624681feb1b1311a4ee0fc40080e747b63fc5d0ed988f8e6aa148aac55987f`。
+
+CLI 构建基线同步为官方 v6.2.4.0 commit `f70344b0b40231347504c995c6ce3f26ccce26a7`，扩展源码目标为 v6.2.4。按用户确认，未使用的 `-U/--self-update` 随上游删除，SFX 格式继续沿用；原 `sw_usleep` 兼容和 libiconv 下载 URL 补丁已由上游修复，删除本地重复实现。新版修复 WebSocket 控制帧与握手校验、HTTP 请求边界、流超时、信号及协程状态等问题；PHP 8.5 与 ODBC configure probe 等仍需要的本地适配继续保留。
+
+本地发行目标改为 v6.2.4.0，仍为双 PHP、三平台四包，共 24 个二进制、26 个 Release 资产。下载参数和旧 tag 布局沿用；发布核验根据发行版本推导默认 Swoole 精确版本，并保留显式源码 ref 覆盖。新增“新版发行拒绝旧 Swoole 版本”回归已观察修正前失败、修正后通过，旧发行校验继续覆盖。
+
+本地 macOS ARM64 完整构建两条 PHP 线的开发包和独立 ODBC 包，共四份，均通过精确 PHP/Swoole 版本、PDO 集合、禁止扩展、PHP/Phar SFX 和 Hyperf 3.2 检查。两个开发包通过 PDO SQLite 读写且不依赖 unixODBC；两个 ODBC 包通过外部 SQLite ODBC 事务、中文和并发查询，动态依赖为 `libodbc.2.dylib`。四份均通过 WebSocket 控制帧 125/126 字节边界和 FIN 规范化检查，帮助信息中已无 `-U/--self-update`；产物元数据的固定基线和 SHA-256 与实际文件一致。
+
+24 项发行配置/旧下载兼容、14 项发布核验单测、`bash -n`、ShellCheck、actionlint、Composer 严格校验及 `git diff --check` 均通过。日志保留在 `.build/logs-v6240`，本地产物在 `dist/v6.2.4.0/macos-a64`，一次性检查脚本已清理。其余组合、Linux 两架构和完整 24 包的实际发布结果以新版本 CI 与分页资产核验为准；未验收外部 MySQL、PostgreSQL 或厂商数据库连接。
+
 ## 当前本地适配
 
 1. `scripts/build-swoole-cli.sh` 按 `PHPSFX_PHP_VERSION` 将基线的 `sapi/PHP-VERSION.conf` 切换为 `8.4.27` 或 `8.5.12`，调用基线的 `sync-source-code.php`，并确认 `main/php_version.h` 报告精确版本。同一版本线的 patch 更新也必须同步，不能只比较 `8.4` / `8.5` 前缀。
@@ -65,8 +77,8 @@ v6.2.3.5 的 ODBC 作业在运行全部发行配置检查时，将当前作业�
 3. 构建阶段按组合写入本仓库的 `pdo_sqlite` 和/或 `pdo_pgsql` builder。`pdo_pgsql` 依赖本地精简的 `sapi/src/builder/library/pgsql.php` 生成 `libpq`，通过 `LIBPQ_CFLAGS` / `LIBPQ_LIBS` 配置 PHP 的 `--with-pdo-pgsql`。
 4. Profile 根据数据库组合选择 `pdo_mysql`、`pdo_pgsql`、`pdo_sqlite`，不启用 `mysqli`、原生 `pgsql`、`SQLite3` 或 Swoole SQLite hook。
 5. Swoole builder 保留 server、coroutine、curl hook、mysqlnd、DNS 和 ODBC 能力；ODBC 版的 unixODBC 动态链接和 configure probe 修补仍由当前仓库维护。
-6. phpredis 固定为 6.3.0（PHP 8.5 的 smart-string 头文件已从 `ext/standard` 移至 Zend）。仅 PHP 8.5 构建移除旧 OPcache 注册/stub、补入 lexbor/uri，8.4 保留基线注册方式。Swoole 6.2.3 的 `sw_usleep` 调用在两条版本线均改为标准 C++ 睡眠实现；8.4 原生编译已证实它同样需要该兼容补丁。
-7. `scripts/validate-swoole-cli.sh` 强制检查目标 PHP 精确版本、Swoole 6.2.3、所选 PDO driver 集合（含未选驱动缺席）、含 SQLite 包的 PDO SQLite 本地读写，以及禁止扩展集合。
+6. phpredis 固定为 6.3.0（PHP 8.5 的 smart-string 头文件已从 `ext/standard` 移至 Zend）。仅 PHP 8.5 构建移除旧 OPcache 注册/stub、补入 lexbor/uri，8.4 保留基线注册方式。Swoole 6.2.4 和新 CLI 基线已包含睡眠函数及 libiconv URL 修复，本地不再重复应用。
+7. `scripts/validate-swoole-cli.sh` 强制检查目标 PHP 精确版本、Swoole 6.2.4、所选 PDO driver 集合（含未选驱动缺席）、含 SQLite 包的 PDO SQLite 本地读写，以及禁止扩展集合；显式指定旧源码 ref 时按该版本验证。
 
 ## 参考官方更新的流程
 

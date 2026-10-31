@@ -9,7 +9,7 @@ on:
       version:
         description: 'Self-maintained swoole-cli release or workflow artifact version'
         required: true
-        default: 'v6.2.3.6'
+        default: 'v6.2.4.0'
         type: string
       publish:
         description: 'Create a GitHub Release after all builds and checks pass'
@@ -40,12 +40,12 @@ on:
       swoole_cli_ref:
         description: 'Pinned official swoole-cli baseline commit'
         required: true
-        default: 'f7903840c3e959612dac7d413205e1bdb0067029'
+        default: 'f70344b0b40231347504c995c6ce3f26ccce26a7'
         type: string
       swoole_src_ref:
         description: 'swoole-src branch, tag, or commit'
         required: true
-        default: 'v6.2.3'
+        default: 'v6.2.4'
         type: string
       prepare_flags:
         description: 'Optional prepare.php flags. Leave empty to use repository defaults.'
@@ -91,8 +91,8 @@ jobs:
       PHPSFX_RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
       PHPSFX_PHP_VERSION: ${{ matrix.php }}
       PHPSFX_PHP_FULL_VERSION: ${{ github.event.inputs.php_full_version || (matrix.php == '8.4' && (github.event.inputs.php84_full_version || '8.4.27')) || github.event.inputs.php85_full_version || '8.5.12' }}
-      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'f7903840c3e959612dac7d413205e1bdb0067029' }}
-      PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.3' }}
+      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'f70344b0b40231347504c995c6ce3f26ccce26a7' }}
+      PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.4' }}
       PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/${{ format('php{0}-{1}-{2}', matrix.php, matrix.platform.name, matrix.package.name) }}
       PHPSFX_BUILD_JOBS: 2
 
@@ -261,8 +261,8 @@ jobs:
       PHPSFX_PHP_VERSIONS: ${{ github.event.inputs.php_version == '8.4' && '8.4' || github.event.inputs.php_version == '8.5' && '8.5' || '8.4 8.5' }}
       PHPSFX_PHP84_FULL_VERSION: ${{ (github.event.inputs.php_version == '8.4' && github.event.inputs.php_full_version) || github.event.inputs.php84_full_version || '8.4.27' }}
       PHPSFX_PHP85_FULL_VERSION: ${{ (github.event.inputs.php_version == '8.5' && github.event.inputs.php_full_version) || github.event.inputs.php85_full_version || '8.5.12' }}
-      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'f7903840c3e959612dac7d413205e1bdb0067029' }}
-      PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.3' }}
+      PHPSFX_SWOOLE_CLI_REF: ${{ github.event.inputs.swoole_cli_ref || 'f70344b0b40231347504c995c6ce3f26ccce26a7' }}
+      PHPSFX_SWOOLE_SRC_REF: ${{ github.event.inputs.swoole_src_ref || 'v6.2.4' }}
       PHPSFX_SWOOLE_CLI_PREPARE_FLAGS: ${{ github.event.inputs.prepare_flags }}
     steps:
       - name: Checkout self-maintained swoole-cli
