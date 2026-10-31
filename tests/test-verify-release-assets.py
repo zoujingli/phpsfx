@@ -16,20 +16,21 @@ verify = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(verify)
 
 
+@patch.dict(os.environ, {"PHPSFX_SWOOLE_SRC_REF": ""})
 class ReleaseAssetTests(unittest.TestCase):
     def make_dist(self, directory, php_versions=("8.4", "8.5"), version="v6.2.3.3"):
         dist = Path(directory)
         items = []
         checksums = []
         full_versions = {"8.4": "8.4.27", "8.5": "8.5.9" if version == "v6.2.3.2" else "8.5.12"}
-        compact = version in ("v6.2.3.4", "v6.2.3.5", "v6.2.3.6")
+        compact = version not in ("v6.2.3.2", "v6.2.3.3")
         platforms = ("linux-x64", "linux-a64", "macos-a64") if compact else verify.PLATFORMS
         packages = [(database + ("-odbc" if odbc else ""), database, odbc)
                     for database in verify.DATABASES for odbc in (False, True)]
         if compact:
             packages = [("mysql", "mysql", False), ("pgsql", "pgsql", False),
                         ("odbc", "odbc", True), ("sqlite-mysql-pgsql-odbc", "sqlite-mysql-pgsql", True)]
-        if version in ("v6.2.3.5", "v6.2.3.6"):
+        if compact and version != "v6.2.3.4":
             packages[-1] = ("sqlite-mysql-pgsql", "sqlite-mysql-pgsql", True)
         for php in php_versions:
             full = full_versions[php]
@@ -48,7 +49,7 @@ class ReleaseAssetTests(unittest.TestCase):
                         "platform": platform, "variant": variant, "asset": name,
                         "metadata_asset": "build-meta.json" if compact else meta, "database_variant": database,
                         "php_version": php, "php_full_version": full,
-                        "cli_version": version, "swoole_version": "6.2.3",
+                        "cli_version": version, "swoole_version": ".".join(version.removeprefix("v").split(".")[:3]),
                         "profile": "hyperfadmin-odbc" if odbc else "hyperfadmin-slim",
                         "required_pdo_drivers": ",".join(drivers + (["odbc"] if odbc else [])),
                         "extensions": ",".join(f"pdo_{d}" for d in drivers),
@@ -133,6 +134,26 @@ class ReleaseAssetTests(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     verify.expected_assets(dist, "v6.2.3.6")
 
+    def test_updated_swoole_and_legacy_release_versions_validate(self):
+        for version in ("v6.2.3.6", "v6.2.4.0"):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
+                dist, _ = self.make_dist(directory, version=version)
+                self.assertEqual(len(verify.expected_assets(dist, version)), 26)
+                result = subprocess.run(["python3", str(SCRIPT), "--local", version, str(dist)],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Verified 24 local binaries", result.stdout)
+
+    def test_rejects_previous_swoole_version_in_updated_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dist, summary = self.make_dist(directory, version="v6.2.4.0")
+            for item in summary["platforms"]:
+                item["swoole_version"] = "6.2.3"
+                (dist / f"build-meta-php{item['php_version']}-{item['variant']}.json").write_text(json.dumps(item))
+            (dist / "build-meta.json").write_text(json.dumps(summary))
+            with self.assertRaises(AssertionError):
+                verify.expected_assets(dist, "v6.2.4.0")
+
     def test_two_php_lines_keep_matching_variants_separate(self):
         with tempfile.TemporaryDirectory() as directory:
             dist, _ = self.make_dist(directory)
@@ -169,7 +190,8 @@ class ReleaseAssetTests(unittest.TestCase):
                 verify.expected_assets(dist, "v6.2.3.3")
 
     def test_single_line_dispatch_and_legacy_assets_still_validate(self):
-        for version, php in (("v6.2.3.6", "8.4"), ("v6.2.3.6", "8.5"),
+        for version, php in (("v6.2.4.0", "8.4"), ("v6.2.4.0", "8.5"),
+                             ("v6.2.3.6", "8.4"), ("v6.2.3.6", "8.5"),
                              ("v6.2.3.5", "8.4"), ("v6.2.3.5", "8.5"),
                              ("v6.2.3.4", "8.4"), ("v6.2.3.4", "8.5"),
                              ("v6.2.3.3", "8.4"), ("v6.2.3.3", "8.5"), ("v6.2.3.2", "8.5")):
@@ -177,7 +199,7 @@ class ReleaseAssetTests(unittest.TestCase):
                 dist, _ = self.make_dist(directory, (php,), version)
                 selected = (php,) if version != "v6.2.3.2" else None
                 self.assertEqual(len(verify.expected_assets(dist, version, selected)),
-                                 14 if version in ("v6.2.3.4", "v6.2.3.5", "v6.2.3.6") else 114)
+                                 114 if version in ("v6.2.3.2", "v6.2.3.3") else 14)
 
     def test_merge_rejects_duplicate_build_within_one_php_line(self):
         with tempfile.TemporaryDirectory() as directory:

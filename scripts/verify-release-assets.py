@@ -93,7 +93,7 @@ def expected_assets(dist: Path, version: str, php_versions: tuple[str, ...] | No
         assert name == f"swoole-cli-php{item['php_version']}-{variant}"
         assert item["php_full_version"] == full_versions[php]
         assert item["php_full_version"].startswith(php + ".")
-        swoole_ref = os.getenv("PHPSFX_SWOOLE_SRC_REF", "v6.2.3").removeprefix("v")
+        swoole_ref = (os.getenv("PHPSFX_SWOOLE_SRC_REF") or version.rsplit(".", 1)[0]).removeprefix("v")
         if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", swoole_ref):
             assert item["swoole_version"] == swoole_ref
         platform, database, odbc = item["platform"], item["database_variant"], item["swoole_odbc"]
