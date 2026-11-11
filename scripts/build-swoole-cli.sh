@@ -233,6 +233,16 @@ sha256_file() {
   fi
 }
 
+strip_debug_symbols() {
+  local binary=$1
+  require_command strip
+  case "${PLATFORM}" in
+    linux-*) strip --strip-debug "${binary}" ;;
+    macos-*) strip -S "${binary}" ;;
+    *) echo "Unsupported platform for debug-symbol stripping: ${PLATFORM}" >&2; exit 2 ;;
+  esac
+}
+
 download_swoole_cli_archive() {
   local tmp_dir archive_url archive_file
   tmp_dir="${SWOOLE_CLI_DIR}.archive.$$"
@@ -1155,6 +1165,7 @@ fi
 ASSET_NAME="swoole-cli-php${PHP_VERSION}-${PLATFORM}${ASSET_SUFFIX_PART}"
 cp "${SWOOLE_CLI_BIN}" "${DIST_DIR}/${ASSET_NAME}"
 chmod +x "${DIST_DIR}/${ASSET_NAME}"
+strip_debug_symbols "${DIST_DIR}/${ASSET_NAME}"
 
 ODBC_DYNAMIC_DEPENDENCY=
 if [[ "${PLATFORM}" == linux-* ]]; then
@@ -1209,7 +1220,7 @@ cat > "${DIST_DIR}/${METADATA_ASSET}" <<META
   "metadata_asset": "build-meta.json",
   "profile": "${PROFILE_NAME}",
   "database_variant": "${DB_VARIANT}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.5.0}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.5.1}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",

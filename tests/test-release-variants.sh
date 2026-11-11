@@ -33,7 +33,7 @@ for php_version in 8.4 8.5; do
         expected=$2
         [[ "${PHPSFX_ASSET_SUFFIX}" == "$3" ]] || exit 1
         [[ "${PHPSFX_REQUIRED_PDO_DRIVERS}" == "${expected}" ]] || exit 1
-        [[ "${PHPSFX_RELEASE_VERSION}" == v6.2.5.0 ]] || exit 1
+        [[ "${PHPSFX_RELEASE_VERSION}" == v6.2.5.1 ]] || exit 1
         [[ "${PHPSFX_SWOOLE_CLI_REF}" == e891b2b38720c5879c9a2c7894384b9af7228de0 ]] || exit 1
         [[ "${PHPSFX_SWOOLE_SRC_REF}" == v6.2.5 ]] || exit 1
         [[ "${PHPSFX_PHP_FULL_VERSION}" == "$4" ]] || exit 1
@@ -119,7 +119,7 @@ for php_version in 8.4 8.5; do
   for platform in linux-x64 linux-a64 macos-a64; do
     for package in mysql pgsql odbc sqlite-mysql-pgsql; do
       check_download "${platform}-${package}" latest "latest/download/swoole-cli-php${php_version}-${platform}-${package}" "${php_version}"
-      for version in v6.2.3.5 v6.2.3.6 v6.2.4.0 v6.2.5.0; do
+      for version in v6.2.3.5 v6.2.3.6 v6.2.4.0 v6.2.5.0 v6.2.5.1; do
         check_download "${platform}-${package}" "${version}" "download/${version}/swoole-cli-php${php_version}-${platform}-${package}" "${php_version}"
       done
     done

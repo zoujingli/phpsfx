@@ -87,6 +87,10 @@ PHP 两条版本线没有新的 patch 版本，仍固定为 8.4.27 和 8.5.12。
 
 本次同步后的 Profile/发布核验覆盖新默认版本和旧 Release 下载兼容；v6.2.5.0 CI 运行 `42971808577` 的 25 个 job 全部成功，生成双 PHP、三平台四用途的 24 个二进制。合并 workflow artifact 为 50 个文件，归档 SHA-256 为 `6b71840c582165003d8f5febc2dbce6ef67ae564730d1f17809d84503770c99a`；分页 Release API 核对 26 个资产的名称、大小和 SHA-256 全部一致，24 个 `php_version + variant` 身份、PHP 8.4.27/8.5.12、Swoole 6.2.5 及新上游 ref 均一致，抽查两条 PHP 线三个平台公开下载链接通过。仍未验收外部 MySQL、PostgreSQL 或厂商数据库连接。
 
+## v6.2.5.1 剥离调试符号
+
+v6.2.5.0 的 dmskc2 代表运行时仍包含调试符号。对同一份可执行文件做平台对应的 `strip --strip-debug`（macOS 使用 `strip -S`）后，Linux ARM64 从 44.5 MB 降至 39.4 MB，macOS ARM64 从 35.1 MB 降至 34.8 MB；PHP、Swoole、PDO 驱动、SFX/Phar 行为均保持通过。v6.2.5.1 在构建产物复制到 `dist/` 后、动态依赖和运行时校验前统一剥离调试符号，导入脚本同步采用相同规则；扩展集合、编译选项和 ODBC 动态链接合同不变。旧 v6.2.5.0 tag 与 Release 保留不变。
+
 ## 当前本地适配
 
 1. `scripts/build-swoole-cli.sh` 按 `PHPSFX_PHP_VERSION` 将基线的 `sapi/PHP-VERSION.conf` 切换为 `8.4.27` 或 `8.5.12`，调用基线的 `sync-source-code.php`，并确认 `main/php_version.h` 报告精确版本。同一版本线的 patch 更新也必须同步，不能只比较 `8.4` / `8.5` 前缀。

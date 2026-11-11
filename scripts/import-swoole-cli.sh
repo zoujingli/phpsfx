@@ -87,11 +87,22 @@ else
   sha256_file() { shasum -a 256 "$1" | awk '{print $1}'; }
 fi
 
+strip_debug_symbols() {
+  local binary=$1
+  command -v strip >/dev/null 2>&1 || { echo 'Required command not found: strip' >&2; exit 127; }
+  case "${PLATFORM}" in
+    linux-*) strip --strip-debug "${binary}" ;;
+    macos-*) strip -S "${binary}" ;;
+    *) echo "Unsupported platform for debug-symbol stripping: ${PLATFORM}" >&2; exit 2 ;;
+  esac
+}
+
 mkdir -p "${DIST_DIR}"
 VARIANT="${PLATFORM}-${ASSET_SUFFIX}"
 ASSET_NAME="swoole-cli-php${PHP_VERSION}-${VARIANT}"
 cp "${SOURCE_BIN}" "${DIST_DIR}/${ASSET_NAME}"
 chmod +x "${DIST_DIR}/${ASSET_NAME}"
+strip_debug_symbols "${DIST_DIR}/${ASSET_NAME}"
 
 PHPSFX_EXPECTED_PHP_PREFIX="${PHP_VERSION}." \
 PHPSFX_EXPECTED_PHP_VERSION="${PHP_FULL_VERSION}" \
@@ -136,7 +147,7 @@ cat > "${DIST_DIR}/${METADATA_ASSET}" <<META
   "metadata_asset": "build-meta.json",
   "profile": "${PROFILE_NAME}",
   "database_variant": "${DB_VARIANT}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.5.0}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.5.1}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",

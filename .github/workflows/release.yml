@@ -9,7 +9,7 @@ on:
       version:
         description: 'Self-maintained swoole-cli release or workflow artifact version'
         required: true
-        default: 'v6.2.5.0'
+        default: 'v6.2.5.1'
         type: string
       publish:
         description: 'Create a GitHub Release after all builds and checks pass'
