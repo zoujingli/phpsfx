@@ -85,7 +85,7 @@ CLI 构建基线同步为官方 v6.2.4.0 commit `f70344b0b40231347504c995c6ce3f2
 
 PHP 两条版本线没有新的 patch 版本，仍固定为 8.4.27 和 8.5.12。构建默认值、workflow 输入、导入元数据和发行校验同步到 CLI v6.2.5.0 / Swoole v6.2.5；PHP 8.5 OPcache、lexbor/uri 和 ODBC configure probe 等本地必要适配继续保留，未因版本更新恢复未使用能力或移动历史 tag。
 
-本次同步后的 Profile/发布核验覆盖新默认版本和旧 Release 下载兼容；完整 24 包构建、SFX/Phar、Hyperf、ODBC 动态依赖及发布资产核验以新 tag 的 CI 和分页 Release 检查为准，未在本地声称完成跨平台全量构建或外部数据库连接验收。
+本次同步后的 Profile/发布核验覆盖新默认版本和旧 Release 下载兼容；v6.2.5.0 CI 运行 `42971808577` 的 25 个 job 全部成功，生成双 PHP、三平台四用途的 24 个二进制。合并 workflow artifact 为 50 个文件，归档 SHA-256 为 `6b71840c582165003d8f5febc2dbce6ef67ae564730d1f17809d84503770c99a`；分页 Release API 核对 26 个资产的名称、大小和 SHA-256 全部一致，24 个 `php_version + variant` 身份、PHP 8.4.27/8.5.12、Swoole 6.2.5 及新上游 ref 均一致，抽查两条 PHP 线三个平台公开下载链接通过。仍未验收外部 MySQL、PostgreSQL 或厂商数据库连接。
 
 ## 当前本地适配
 
