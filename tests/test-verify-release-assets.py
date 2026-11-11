@@ -135,7 +135,7 @@ class ReleaseAssetTests(unittest.TestCase):
                     verify.expected_assets(dist, "v6.2.3.6")
 
     def test_updated_swoole_and_legacy_release_versions_validate(self):
-        for version in ("v6.2.3.6", "v6.2.4.0"):
+        for version in ("v6.2.3.6", "v6.2.4.0", "v6.2.5.0"):
             with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
                 dist, _ = self.make_dist(directory, version=version)
                 self.assertEqual(len(verify.expected_assets(dist, version)), 26)
@@ -146,13 +146,13 @@ class ReleaseAssetTests(unittest.TestCase):
 
     def test_rejects_previous_swoole_version_in_updated_release(self):
         with tempfile.TemporaryDirectory() as directory:
-            dist, summary = self.make_dist(directory, version="v6.2.4.0")
+            dist, summary = self.make_dist(directory, version="v6.2.5.0")
             for item in summary["platforms"]:
                 item["swoole_version"] = "6.2.3"
                 (dist / f"build-meta-php{item['php_version']}-{item['variant']}.json").write_text(json.dumps(item))
             (dist / "build-meta.json").write_text(json.dumps(summary))
             with self.assertRaises(AssertionError):
-                verify.expected_assets(dist, "v6.2.4.0")
+                verify.expected_assets(dist, "v6.2.5.0")
 
     def test_two_php_lines_keep_matching_variants_separate(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -190,7 +190,8 @@ class ReleaseAssetTests(unittest.TestCase):
                 verify.expected_assets(dist, "v6.2.3.3")
 
     def test_single_line_dispatch_and_legacy_assets_still_validate(self):
-        for version, php in (("v6.2.4.0", "8.4"), ("v6.2.4.0", "8.5"),
+        for version, php in (("v6.2.5.0", "8.4"), ("v6.2.5.0", "8.5"),
+                             ("v6.2.4.0", "8.4"), ("v6.2.4.0", "8.5"),
                              ("v6.2.3.6", "8.4"), ("v6.2.3.6", "8.5"),
                              ("v6.2.3.5", "8.4"), ("v6.2.3.5", "8.5"),
                              ("v6.2.3.4", "8.4"), ("v6.2.3.4", "8.5"),

@@ -1,6 +1,6 @@
 # 自维护 Swoole CLI
 
-本仓库是自维护的 `swoole-cli` 发行源码和构建仓库，当前构建版本为 `v6.2.4.0`。Release 同时发布 PHP `8.4.27`、`8.5.12` 两条版本线，Swoole 均为 `6.2.4`，并保留把 PHP 入口或 Phar 追加进运行时的单文件能力。两条 PHP 版本线均包含 CVE-2026-109618、CVE-2026-109619 的安全修复；已打包的单文件应用需要使用新运行时重新打包。官方仓库只作为固定基线和实现参考；同步记录见 [docs/upstream-sync.md](docs/upstream-sync.md)。
+本仓库是自维护的 `swoole-cli` 发行源码和构建仓库，当前构建版本为 `v6.2.5.0`。Release 同时发布 PHP `8.4.27`、`8.5.12` 两条版本线，Swoole 均为 `6.2.5`，并保留把 PHP 入口或 Phar 追加进运行时的单文件能力。两条 PHP 版本线均包含 CVE-2026-109618、CVE-2026-109619 的安全修复；已打包的单文件应用需要使用新运行时重新打包。官方仓库只作为固定基线和实现参考；同步记录见 [docs/upstream-sync.md](docs/upstream-sync.md)。
 
 两条 PHP 版本线在 Linux x86_64、Linux ARM64、macOS ARM64 三个平台各提供 `mysql`、`pgsql`、`odbc` 三种线上包，以及 `sqlite-mysql-pgsql` 开发包，合计 24 个二进制。开发包在 Linux 启用 PDO ODBC 和 Swoole 协程 ODBC，在 macOS 禁用 ODBC；三个平台均保留独立 ODBC 线上包。具备 ODBC 能力的包动态依赖部署机的 unixODBC，厂商驱动、DSN、客户端依赖和凭据由部署环境提供。
 
@@ -82,8 +82,8 @@ GitHub Actions workflow：`.github/workflows/release.yml`。
 示例：
 
 ```bash
-git tag v6.2.4.0
-git push origin swoole-cli v6.2.4.0
+git tag v6.2.5.0
+git push origin swoole-cli v6.2.5.0
 ```
 
 默认上游源码：
@@ -93,7 +93,7 @@ https://github.com/swoole/swoole-cli.git
 https://github.com/swoole/swoole-src.git
 ```
 
-默认基线为官方 `swoole-cli v6.2.4.0` commit `f70344b0b40231347504c995c6ce3f26ccce26a7`，目标为 PHP 8.4.27 / 8.5.12 和 `swoole-src v6.2.4`。SFX 格式和裁剪机制沿用，`-U/--self-update` 随上游删除，更新运行时使用本仓库下载脚本。构建脚本会按目标版本切换基线的 `PHP-VERSION.conf`，同步 PHP 源码并校验最终二进制的精确版本。PHP 8.5 专用的 OPcache、lexbor/uri 补丁仅在 8.5 构建中应用；原睡眠函数兼容和 libiconv 下载 URL 补丁已由上游修复，删除本地重复实现。每次参考官方优化后的变更记录在 [docs/upstream-sync.md](docs/upstream-sync.md)。
+默认基线为官方 `swoole-cli v6.2.5.0` commit `e891b2b38720c5879c9a2c7894384b9af7228de0`，目标为 PHP 8.4.27 / 8.5.12 和 `swoole-src v6.2.5`。SFX 格式和裁剪机制沿用，`-U/--self-update` 随上游删除，更新运行时使用本仓库下载脚本。构建脚本会按目标版本切换基线的 `PHP-VERSION.conf`，同步 PHP 源码并校验最终二进制的精确版本。PHP 8.5 专用的 OPcache、lexbor/uri 补丁仅在 8.5 构建中应用；原睡眠函数兼容和 libiconv 下载 URL 补丁已由上游修复，删除本地重复实现。每次参考官方优化后的变更记录在 [docs/upstream-sync.md](docs/upstream-sync.md)。
 
 ## 本地 / WSL 调试
 
@@ -107,8 +107,8 @@ PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
 PHPSFX_DB_VARIANT=odbc \
 PHPSFX_PHP_VERSION=8.5 \
 PHPSFX_PHP_FULL_VERSION=8.5.12 \
-PHPSFX_SWOOLE_CLI_REF=f70344b0b40231347504c995c6ce3f26ccce26a7 \
-PHPSFX_SWOOLE_SRC_REF=v6.2.4 \
+PHPSFX_SWOOLE_CLI_REF=e891b2b38720c5879c9a2c7894384b9af7228de0 \
+PHPSFX_SWOOLE_SRC_REF=v6.2.5 \
   bash scripts/build-swoole-cli.sh
 ```
 
@@ -135,12 +135,12 @@ PHPSFX_DB_VARIANT=sqlite-mysql-pgsql \
   bash scripts/build-swoole-cli.sh macos-a64
 ```
 
-如果本地已经安装了 PHP 8.4.27 或 8.5.12 / Swoole 6.2.4 CLI，可以先导入为标准命名产物，通过 `PHPSFX_PHP_VERSION` 选择相应版本线，用于快速验证下游打包链路。额外的非数据库扩展可在本地调试时允许，但 PDO 驱动仍必须与所选组合完全一致；正式发布仍应使用源码构建的 slim 产物：
+如果本地已经安装了 PHP 8.4.27 或 8.5.12 / Swoole 6.2.5 CLI，可以先导入为标准命名产物，通过 `PHPSFX_PHP_VERSION` 选择相应版本线，用于快速验证下游打包链路。额外的非数据库扩展可在本地调试时允许，但 PDO 驱动仍必须与所选组合完全一致；正式发布仍应使用源码构建的 slim 产物：
 
 ```bash
 PHPSFX_ALLOW_EXTRA_EXTENSIONS=1 \
-PHPSFX_SWOOLE_CLI_REF=f70344b0b40231347504c995c6ce3f26ccce26a7 \
-PHPSFX_SWOOLE_SRC_REF=v6.2.4 \
+PHPSFX_SWOOLE_CLI_REF=e891b2b38720c5879c9a2c7894384b9af7228de0 \
+PHPSFX_SWOOLE_SRC_REF=v6.2.5 \
   bash scripts/import-swoole-cli.sh linux-x64 /usr/local/bin/php
 ```
 
@@ -166,7 +166,7 @@ PHPSFX_DB_VARIANT=sqlite-mysql-pgsql \
 
 ## 通用 ODBC 运行时
 
-两条 PHP 版本线、三个平台的 `-odbc` 线上包，以及 Linux 的 `-sqlite-mysql-pgsql` 开发包，使用 Swoole 6.2.4 的协程 PDO ODBC 驱动。macOS 开发包不提供 ODBC，也不依赖 unixODBC。ODBC 只提供统一连接接口，不包含 unixODBC、任何数据库厂商客户端、DSN、账号或密码，也不代表 SQL 方言、迁移、分页、标识符、字段类型和字符集已经兼容目标数据库。
+两条 PHP 版本线、三个平台的 `-odbc` 线上包，以及 Linux 的 `-sqlite-mysql-pgsql` 开发包，使用 Swoole 6.2.5 的协程 PDO ODBC 驱动。macOS 开发包不提供 ODBC，也不依赖 unixODBC。ODBC 只提供统一连接接口，不包含 unixODBC、任何数据库厂商客户端、DSN、账号或密码，也不代表 SQL 方言、迁移、分页、标识符、字段类型和字符集已经兼容目标数据库。
 
 通用安装、PHP 接口、服务环境和 MySQL、SQLite、PostgreSQL、SQL Server、Oracle，以及达梦、人大金仓、openGauss/GaussDB、OceanBase、GBase、神通、瀚高、Vastbase、TiDB、GoldenDB 等国产数据库接入路径见 [ODBC 环境与常见数据库接入](docs/odbc-runtime.md)。达梦的官方客户端安装、真实连库脚本和生产验收边界见 [达梦 ODBC 环境与真实验收](docs/dameng-odbc-runtime.md)。
 
@@ -244,7 +244,7 @@ bash scripts/test-dameng-odbc.sh \
 
 ```bash
 composer install --working-dir=tests/hyperf-smoke --no-dev
-PHPSFX_EXPECTED_SWOOLE_VERSION=6.2.4 \
+PHPSFX_EXPECTED_SWOOLE_VERSION=6.2.5 \
 PHPSFX_DB_VARIANT=mysql \
   bash scripts/test-hyperf-smoke.sh dist/swoole-cli-php8.5-linux-x64-mysql
 ```
@@ -254,7 +254,7 @@ PHPSFX_DB_VARIANT=mysql \
 ```bash
 PHPSFX_EXPECTED_PHP_PREFIX=8.5. \
 PHPSFX_EXPECTED_PHP_VERSION=8.5.12 \
-PHPSFX_EXPECTED_SWOOLE_VERSION=6.2.4 \
+PHPSFX_EXPECTED_SWOOLE_VERSION=6.2.5 \
 PHPSFX_EXPECT_SWOOLE_ODBC=1 \
 PHPSFX_REQUIRED_PDO_DRIVERS=sqlite,mysql,pgsql,odbc \
 PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,bz2,gd,opcache \
@@ -284,7 +284,7 @@ bash scripts/download-release-asset.sh linux-x64-pgsql-sqlite v6.2.3.1 /tmp/swoo
 下载不同组合或 ODBC 产物：
 
 ```bash
-bash scripts/download-release-asset.sh linux-x64-mysql v6.2.4.0 /tmp/swoole-cli-mysql
+bash scripts/download-release-asset.sh linux-x64-mysql v6.2.5.0 /tmp/swoole-cli-mysql
 bash scripts/download-release-asset.sh linux-a64-pgsql latest /tmp/swoole-cli-pgsql
 bash scripts/download-release-asset.sh linux-x64-odbc latest /tmp/swoole-cli-odbc
 bash scripts/download-release-asset.sh macos-a64-sqlite-mysql-pgsql latest /tmp/swoole-cli-dev

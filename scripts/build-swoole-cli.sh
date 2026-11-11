@@ -24,8 +24,8 @@ esac
 SWOOLE_CLI_REPO=${PHPSFX_SWOOLE_CLI_REPO:-https://github.com/swoole/swoole-cli.git}
 # Keep an immutable official build baseline and apply the selected PHP/Swoole
 # versions plus this repository's SFX and package profiles locally.
-SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-f70344b0b40231347504c995c6ce3f26ccce26a7}
-SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.4}
+SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-e891b2b38720c5879c9a2c7894384b9af7228de0}
+SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.5}
 EXPECTED_SWOOLE_VERSION=${PHPSFX_EXPECTED_SWOOLE_VERSION:-}
 EXPECTED_PHP_FULL_VERSION=${PHP_FULL_VERSION}
 if [[ -z "${EXPECTED_SWOOLE_VERSION}" && "${SWOOLE_SRC_REF}" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
@@ -64,8 +64,8 @@ Important environment variables:
   PHPSFX_PHP_VERSION                 PHP version line: 8.4 or 8.5, default: 8.5
   PHPSFX_PHP_FULL_VERSION            Exact PHP release source/runtime version, defaults: 8.4.27 / 8.5.12
   PHPSFX_SWOOLE_CLI_REPO             Swoole CLI git repository, default: https://github.com/swoole/swoole-cli.git
-  PHPSFX_SWOOLE_CLI_REF              Swoole CLI baseline commit, default: f70344b0b40231347504c995c6ce3f26ccce26a7
-  PHPSFX_SWOOLE_SRC_REF              swoole-src tag, branch, or commit, default: v6.2.4
+  PHPSFX_SWOOLE_CLI_REF              Swoole CLI baseline commit, default: e891b2b38720c5879c9a2c7894384b9af7228de0
+  PHPSFX_SWOOLE_SRC_REF              swoole-src tag, branch, or commit, default: v6.2.5
   PHPSFX_EXPECTED_SWOOLE_VERSION     Exact runtime Swoole version; inferred from numeric source tags
   PHPSFX_SWOOLE_CLI_PREPARE_FLAGS    Space-separated prepare.php flags, e.g. '+redis -mongodb'
   PHPSFX_REQUIRED_EXTENSIONS         Comma-separated runtime extensions checked after build
@@ -1209,7 +1209,7 @@ cat > "${DIST_DIR}/${METADATA_ASSET}" <<META
   "metadata_asset": "build-meta.json",
   "profile": "${PROFILE_NAME}",
   "database_variant": "${DB_VARIANT}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.4.0}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.5.0}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",

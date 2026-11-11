@@ -11,8 +11,8 @@ then validate it and generate build-meta-php<version>-<platform>-<combination>.j
 tests against the recommended upstream release when the runtime is already installed.
 
 Environment:
-  PHPSFX_SWOOLE_CLI_REF     Swoole CLI baseline commit recorded in metadata, default: f70344b0b40231347504c995c6ce3f26ccce26a7
-  PHPSFX_SWOOLE_SRC_REF     swoole-src ref recorded in metadata, default: v6.2.4
+  PHPSFX_SWOOLE_CLI_REF     Swoole CLI baseline commit recorded in metadata, default: e891b2b38720c5879c9a2c7894384b9af7228de0
+  PHPSFX_SWOOLE_SRC_REF     swoole-src ref recorded in metadata, default: v6.2.5
   PHPSFX_EXPECTED_SWOOLE_VERSION Exact runtime Swoole version; inferred from numeric source tags
 USAGE
   exit 2
@@ -44,8 +44,8 @@ case "${PHP_VERSION}" in
   8.5) PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-8.5.12} ;;
   *) echo "Unsupported PHPSFX_PHP_VERSION: ${PHP_VERSION}" >&2; exit 2 ;;
 esac
-SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-f70344b0b40231347504c995c6ce3f26ccce26a7}
-SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.4}
+SWOOLE_CLI_REF=${PHPSFX_SWOOLE_CLI_REF:-e891b2b38720c5879c9a2c7894384b9af7228de0}
+SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.5}
 if [[ "${SWOOLE_SRC_REF}" =~ ^[0-9]+(\.[0-9]+)+([._-].*)?$ ]]; then
   SWOOLE_SRC_REF="v${SWOOLE_SRC_REF}"
 fi
@@ -136,7 +136,7 @@ cat > "${DIST_DIR}/${METADATA_ASSET}" <<META
   "metadata_asset": "build-meta.json",
   "profile": "${PROFILE_NAME}",
   "database_variant": "${DB_VARIANT}",
-  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.4.0}",
+  "cli_version": "${PHPSFX_RELEASE_VERSION:-v6.2.5.0}",
   "php_version": "${PHP_VERSION}",
   "php_full_version": "${PHP_FULL_VERSION}",
   "swoole_version": "${SWOOLE_VERSION}",
