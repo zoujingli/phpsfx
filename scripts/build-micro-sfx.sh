@@ -303,6 +303,23 @@ linux_insert = """            shell()->cd(SOURCE_PATH . '/php-src')
 if linux_source.count(linux_needle) != 1:
     raise SystemExit(f'unexpected LinuxBuilder micro make anchor: {linux_source.count(linux_needle)}')
 linux_path.write_text(linux_source.replace(linux_needle, linux_insert, 1))
+
+linux_source = linux_path.read_text()
+linux_needle = """            $vars = $this->getMakeExtraVars();
+
+            // patch fake cli"""
+linux_insert = """            $vars = $this->getMakeExtraVars();
+            if (getenv('PHPSFX_MICRO_UBSAN_LINK') === '1') {
+                // PHP 8.5's ODBC bridge can leave UBSan references in the
+                // Swoole C++ objects. Ask the Zig driver to link compiler_rt
+                // so the final micro.sfx contains the matching handlers.
+                $vars['EXTRA_LIBS'] = trim(($vars['EXTRA_LIBS'] ?? '') . ' -fsanitize=undefined');
+            }
+
+            // patch fake cli"""
+if linux_source.count(linux_needle) != 1:
+    raise SystemExit(f'unexpected LinuxBuilder make-vars anchor: {linux_source.count(linux_needle)}')
+linux_path.write_text(linux_source.replace(linux_needle, linux_insert, 1))
 PY
 
   echo "Configured dynamic Linux unixODBC for micro ODBC" >&2
@@ -339,6 +356,10 @@ if [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${MICRO_DYNAMIC_OD
 fi
 
 patch_dynamic_odbc_builder
+
+if [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${PHP_VERSION}" == 8.5 ]]; then
+  export PHPSFX_MICRO_UBSAN_LINK=1
+fi
 
 composer install --working-dir="${SPC_DIR}" --no-dev --no-interaction --no-progress --prefer-dist
 
