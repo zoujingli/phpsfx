@@ -351,7 +351,7 @@ if [[ "${DISABLE_OPCACHE_JIT}" == 1 ]]; then
   BUILD_ARGS+=(--disable-opcache-jit)
 fi
 if ! ./bin/spc build "${BUILD_ARGS[@]}"; then
-  for build_log in "${SPC_DIR}/log/spc.output.log" "${SPC_DIR}/log/spc.shell.log"; do
+  for build_log in "${SPC_DIR}/log/spc.output.log" "${SPC_DIR}/log/spc.shell.log" "${SPC_DIR}/log/php-src.config.log"; do
     if [[ -f "${build_log}" ]]; then
       echo "--- static-php-cli failure log: ${build_log} ---" >&2
       grep -E -i 'error:|undefined|cannot|not found|ld\.lld|collect2|failed' "${build_log}" | tail -n 120 >&2 || true
