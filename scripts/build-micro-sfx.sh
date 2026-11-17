@@ -211,6 +211,65 @@ if (substr_count($source, $search) !== 1) {
 file_put_contents($path, str_replace($search, $replace, $source));
 ' "${zig_toolchain}"
 
+  python3 - "${unixodbc_builder}" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+needle = "    protected function build(): void\n    {\n"
+insert = r'''        if (getenv('PHPSFX_MICRO_DYNAMIC_ODBC') === '1' && PHP_OS_FAMILY === 'Linux') {
+            // Stage the runner's unixODBC Driver Manager. PHP/Swoole and all
+            // other libraries remain static; only libodbc.so.2 is dynamic.
+            $root = $this->getBuildRootPath();
+            $include = $root . '/include';
+            $lib = $root . '/lib';
+            $pkgconfig = $lib . '/pkgconfig';
+            foreach ([$include, $lib, $pkgconfig] as $directory) {
+                if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
+                    throw new \RuntimeException("Unable to create unixODBC staging directory: {$directory}");
+                }
+            }
+            foreach (['sql.h', 'sqlext.h', 'sqltypes.h', 'odbcinst.h'] as $header) {
+                $source = '/usr/include/' . $header;
+                if (!is_file($source) || !copy($source, $include . '/' . $header)) {
+                    throw new \RuntimeException("Missing system unixODBC header: {$source}");
+                }
+            }
+            foreach (['odbc', 'odbccr', 'odbcinst'] as $library) {
+                $soname = 'lib' . $library . '.so.2';
+                $resolved = trim((string) shell_exec("ldconfig -p 2>/dev/null | awk '/{$soname} / {print \$NF; exit}'"));
+                if ($resolved === '' || !is_file($resolved)) {
+                    throw new \RuntimeException("Missing system unixODBC shared library: {$soname}");
+                }
+                foreach ([$soname, 'lib' . $library . '.so'] as $link) {
+                    $target = $lib . '/' . $link;
+                    @unlink($target);
+                    if (!symlink($resolved, $target)) {
+                        throw new \RuntimeException("Unable to stage unixODBC shared library: {$target}");
+                    }
+                }
+                $archive = $lib . '/lib' . $library . '.a';
+                if (!is_file($archive)) {
+                    $status = 0;
+                    exec('ar rcs ' . escapeshellarg($archive), $output, $status);
+                    if ($status !== 0 || !is_file($archive)) {
+                        throw new \RuntimeException("Unable to create unixODBC link placeholder: {$archive}");
+                    }
+                }
+                $pc = "prefix={$root}\nlibdir={$lib}\nincludedir={$include}\nName: unixODBC {$library}\nVersion: 2.3.12\nLibs: -l{$library}\nCflags: -I{$include}\n";
+                if (file_put_contents($pkgconfig . '/' . $library . '.pc', $pc) === false) {
+                    throw new \RuntimeException("Unable to write unixODBC pkg-config file: {$library}");
+                }
+            }
+            return;
+        }
+'''
+if source.count(needle) != 1:
+    raise SystemExit(f'unexpected unixODBC build anchor: {source.count(needle)}')
+path.write_text(source.replace(needle, needle + insert, 1))
+PY
+
   echo "Configured dynamic Linux unixODBC for micro ODBC" >&2
 }
 
