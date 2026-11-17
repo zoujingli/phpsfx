@@ -233,10 +233,23 @@ insert = r'''        if (getenv('PHPSFX_MICRO_DYNAMIC_ODBC') === '1' && PHP_OS_F
                 }
             }
             $systemInclude = trim((string) shell_exec('pkg-config --variable=includedir odbc 2>/dev/null')) ?: '/usr/include';
+            $systemIncludeCandidates = [$systemInclude];
+            $systemIncludeFlags = trim((string) shell_exec('pkg-config --cflags-only-I odbc 2>/dev/null'));
+            foreach (preg_split('/\s+/', $systemIncludeFlags) as $flag) {
+                if (str_starts_with($flag, '-I') && strlen($flag) > 2) {
+                    $systemIncludeCandidates[] = substr($flag, 2);
+                }
+            }
             foreach (['odbc.h', 'sql.h', 'sqlext.h', 'sqltypes.h', 'odbcinst.h'] as $header) {
-                $source = $systemInclude . '/' . $header;
-                if (!is_file($source) || !copy($source, $include . '/' . $header)) {
-                    throw new \RuntimeException("Missing system unixODBC header: {$source}");
+                $source = '';
+                foreach ($systemIncludeCandidates as $candidate) {
+                    if (is_file($candidate . '/' . $header)) {
+                        $source = $candidate . '/' . $header;
+                        break;
+                    }
+                }
+                if ($source === '' || !copy($source, $include . '/' . $header)) {
+                    throw new \RuntimeException("Missing system unixODBC header: {$header}");
                 }
             }
             foreach (['odbc', 'odbccr', 'odbcinst'] as $library) {
