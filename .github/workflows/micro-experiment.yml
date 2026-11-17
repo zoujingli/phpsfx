@@ -41,13 +41,25 @@ jobs:
         include:
           - php: '8.4'
             platform: macos-a64
-            database: sqlite-mysql-pgsql
+            database: mysql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: macos-15
+          - php: '8.4'
+            platform: macos-a64
+            database: pgsql
             profile: scripts/profiles/hyperfadmin-slim.env
             odbc: '0'
             runner: macos-15
           - php: '8.5'
             platform: macos-a64
-            database: sqlite-mysql-pgsql
+            database: mysql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: macos-15
+          - php: '8.5'
+            platform: macos-a64
+            database: pgsql
             profile: scripts/profiles/hyperfadmin-slim.env
             odbc: '0'
             runner: macos-15

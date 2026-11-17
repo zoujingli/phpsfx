@@ -135,7 +135,7 @@ done
 
 PHPSFX_EXPECTED_SWOOLE_VERSION="${EXPECTED_SWOOLE_VERSION}" \
 PHPSFX_EXPECT_ODBC_SMOKE="$([[ -n "${ODBC_DSN}" ]] && printf 1 || printf 0)" \
-PHPSFX_EXPECT_SQLITE_SMOKE="$([[ "${PHPSFX_DB_VARIANT:-sqlite-mysql-pgsql}" == *sqlite* ]] && printf 1 || printf 0)" \
+PHPSFX_EXPECT_SQLITE_SMOKE="$([[ "${PHPSFX_DB_VARIANT:-mysql}" == *sqlite* ]] && printf 1 || printf 0)" \
   python3 - "${RESPONSE_FILE}" <<'PY'
 import json
 import os

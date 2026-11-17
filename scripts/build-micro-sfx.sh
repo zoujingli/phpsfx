@@ -28,7 +28,7 @@ case "${PLATFORM}" in
 esac
 
 PHP_FULL_VERSION=${PHPSFX_PHP_FULL_VERSION:-${PHP_FULL_VERSION}}
-DB_VARIANT=${PHPSFX_DB_VARIANT:-sqlite-mysql-pgsql}
+DB_VARIANT=${PHPSFX_DB_VARIANT:-mysql}
 SWOOLE_ODBC_ENABLED=${PHPSFX_SWOOLE_ODBC:-0}
 SWOOLE_SRC_REF=${PHPSFX_SWOOLE_SRC_REF:-v6.2.5}
 SWOOLE_SRC_REF="v${SWOOLE_SRC_REF#v}"
@@ -45,6 +45,10 @@ MICRO_EXTENSIONS=${PHPSFX_MICRO_EXTENSIONS:-${PHPSFX_EXTENSIONS:-}}
 EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,phar,zlib}
 FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-}
 REQUIRED_PDO_DRIVERS=${PHPSFX_REQUIRED_PDO_DRIVERS:-}
+case "${DB_VARIANT}" in
+  mysql|pgsql|odbc) ;;
+  *) echo "Unsupported micro production variant: ${DB_VARIANT}; choose mysql, pgsql or odbc" >&2; exit 2 ;;
+esac
 
 usage() {
   cat <<'USAGE'
@@ -56,7 +60,7 @@ Platforms:
 Important environment variables:
   PHPSFX_PHP_VERSION             PHP version line, 8.4 or 8.5
   PHPSFX_PHP_FULL_VERSION        Exact PHP version, 8.4.27 or 8.5.12
-  PHPSFX_DB_VARIANT              mysql, sqlite-mysql-pgsql or odbc
+  PHPSFX_DB_VARIANT              mysql, pgsql or odbc (no mixed development variant)
   PHPSFX_PROFILE_FILE            Current phpsfx profile file
   PHPSFX_MICRO_SPC_REF           Pinned static-php-cli commit
   PHPSFX_SWOOLE_SRC_REF          Swoole source tag/commit, default v6.2.5

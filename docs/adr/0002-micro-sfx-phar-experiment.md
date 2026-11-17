@@ -26,14 +26,14 @@ micro.sfx + [0xfd 0xf6 0x69 0xe6 + big-endian INI length + INI data] + app.phar
 
 | PHP | 平台 | 变体 | 目的 |
 |------|------|------|------|
-| 8.4 / 8.5 | macOS ARM64 | `sqlite-mysql-pgsql` | slim、SQLite、本地 Phar |
+| 8.4 / 8.5 | macOS ARM64 | `mysql`、`pgsql` | 生产 PDO-only、本地 Phar |
 | 8.4 / 8.5 | Linux x86_64 | `odbc` | ODBC hook、动态 unixODBC、事务并发 |
 
 Linux ODBC 必须保留 `libodbc.so.2` 动态依赖。如果 static-php-cli 默认静态 musl 链路无法满足该合同，workflow 保留失败日志并停止扩展，不通过放宽验证来掩盖差异。
 
 ## 当前 macOS ARM64 体积实测
 
-以下比较使用同一个 `sqlite-mysql-pgsql` 变体：micro 由本分支本地构建，Swoole CLI 取已发布的 `v6.2.5.1` 对应资产。数值是可执行文件字节数，未包含 Phar 应用本身。
+以下比较使用此前实验的 macOS ARM64 代表变体：micro 由本分支本地构建，Swoole CLI 取已发布的 `v6.2.5.1` 对应资产。数值是可执行文件字节数，未包含 Phar 应用本身。
 
 | PHP | Swoole CLI | micro.sfx | 差值 | 相对变化 |
 |------|-----------:|----------:|-----:|---------:|
@@ -48,23 +48,23 @@ Linux ODBC 必须保留 `libodbc.so.2` 动态依赖。如果 static-php-cli 默�
 
 当前 dmskc2 的 `composer.json` 明确要求 bcmath、bz2、curl、DOM、fileinfo、GD、mbstring、OpenSSL、OPcache、pcntl、PDO/MySQL、posix、Redis、SimpleXML、sockets、sodium、tokenizer、XML、XMLReader、XMLWriter、Zip 和 zlib；源码还实际使用 ctype、filter、iconv、Phar、Sodium、ZipArchive、GD、pcntl 与 posix。这些能力继续保留。phpdbg、PHP debug build、Xdebug、原生 pgsql、SQLite3、mysqli、session、soap、readline、intl、imagick、gmp 和 mongodb 已经排除。
 
-生产 dmskc2 只声明 `pdo_mysql`；`pdo_pgsql` 和 `pdo_sqlite` 仍保留在开发代表包中，后续可用 `PHPSFX_DB_VARIANT=mysql` 单独构建生产包。当前 static-php-cli 默认编译 OPcache JIT，但 dmskc2 的 SFX 打包配置把 CLI OPcache 关闭，因此实验链从本次起默认传入 `--disable-opcache-jit`。JIT 关闭后的实际字节差异必须以同一版本重建和 Phar smoke 结果为准。
+生产 dmskc2 只声明 `pdo_mysql`；`pdo_mysql` 与 `pdo_pgsql` 分别构建为独立生产变体，不再构建 `sqlite-mysql-pgsql` 混合开发包；micro.sfx 不作为独立 PHP 开发环境。当前 static-php-cli 默认编译 OPcache JIT，但 dmskc2 的 SFX 打包配置把 CLI OPcache 关闭，因此实验链从本次起默认传入 `--disable-opcache-jit`。JIT 关闭后的实际字节差异必须以同一版本重建和 Phar smoke 结果为准。
 
 ## 分支、构建和运行入口
 
 实验代码位于远程 `micro.sfx` 分支，构建入口是 `scripts/build-micro-sfx.sh`，Phar 入口是 `scripts/pack-micro-phar.sh`。分支的 `push` 事件会运行 `.github/workflows/micro-experiment.yml`；该 workflow 只保存每个代表构建的 Actions artifact 和合并证据，不创建 GitHub Release，不修改 `swoole-cli` 分支，也不复制现有 24 个生产资产。
 
-构建变体由 `PHPSFX_DB_VARIANT` 选择：`mysql` 是生产 MySQL-only 试验包，`sqlite-mysql-pgsql` 是开发包，`odbc` 是 Linux ODBC-only 试验包。开发包继续保留 SQLite/MySQL/PostgreSQL PDO；ODBC 包通过 `PHPSFX_SWOOLE_ODBC=1` 启用 Swoole 协程 ODBC，并要求 Linux 运行时动态依赖 `libodbc.so.2`。`PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1` 是默认值，关闭 dmskc2 不使用的 JIT 代码生成，但保留 OPcache 扩展本身。
+构建变体由 `PHPSFX_DB_VARIANT` 选择：`mysql` 和 `pgsql` 是独立生产 PDO-only 试验包，`odbc` 是 Linux ODBC-only 试验包；不再构建混合开发包。ODBC 包通过 `PHPSFX_SWOOLE_ODBC=1` 启用 Swoole 协程 ODBC，并要求 Linux 运行时动态依赖 `libodbc.so.2`。`PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1` 是默认值，关闭 dmskc2 不使用的 JIT 代码生成，但保留 OPcache 扩展本身。
 
 最小运行流程如下：
 
 ```bash
 PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-slim.env \
-PHPSFX_PHP_VERSION=8.5 PHPSFX_DB_VARIANT=sqlite-mysql-pgsql \
+PHPSFX_PHP_VERSION=8.5 PHPSFX_DB_VARIANT=mysql \
 PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1 \
 bash scripts/build-micro-sfx.sh macos-a64
 bash scripts/pack-micro-phar.sh \
-  dist/micro-8.5-macos-a64-sqlite-mysql-pgsql/micro-sfx-php8.5-macos-a64-sqlite-mysql-pgsql \
+  dist/micro-8.5-macos-a64-mysql/micro-sfx-php8.5-macos-a64-mysql \
   app.phar build/app --ini memory_limit=512M
 ./build/app
 ```
