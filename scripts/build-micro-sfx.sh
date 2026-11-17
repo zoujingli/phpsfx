@@ -39,6 +39,8 @@ SPC_DIR=${PHPSFX_MICRO_SPC_DIR:-"${ROOT_DIR}/.build/static-php-cli-micro-${PHP_V
 DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist/micro-${PHP_VERSION}-${PLATFORM}-${DB_VARIANT}"}
 SKIP_DOCTOR=${PHPSFX_MICRO_SKIP_DOCTOR:-0}
 PREFER_PREBUILT=${PHPSFX_MICRO_PREFER_PREBUILT:-0}
+MICRO_DYNAMIC_ODBC=${PHPSFX_MICRO_DYNAMIC_ODBC:-1}
+MICRO_SPC_TARGET=${PHPSFX_MICRO_SPC_TARGET:-}
 TRIM_NATIVE_PDO_EXTENSIONS=${PHPSFX_MICRO_TRIM_NATIVE_PDO_EXTENSIONS:-1}
 DISABLE_OPCACHE_JIT=${PHPSFX_MICRO_DISABLE_OPCACHE_JIT:-1}
 MICRO_EXTENSIONS=${PHPSFX_MICRO_EXTENSIONS:-${PHPSFX_EXTENSIONS:-}}
@@ -55,7 +57,7 @@ usage() {
 Usage: scripts/build-micro-sfx.sh [platform]
 
 Platforms:
-  linux-x64, macos-a64
+  linux-x64, linux-a64, macos-a64
 
 Important environment variables:
   PHPSFX_PHP_VERSION             PHP version line, 8.4 or 8.5
@@ -63,6 +65,8 @@ Important environment variables:
   PHPSFX_DB_VARIANT              mysql, pgsql or odbc (no mixed development variant)
   PHPSFX_PROFILE_FILE            Current phpsfx profile file
   PHPSFX_MICRO_SPC_REF           Pinned static-php-cli commit
+  PHPSFX_MICRO_SPC_TARGET       Linux target override (ODBC defaults to glibc 2.17)
+  PHPSFX_MICRO_DYNAMIC_ODBC     Use a dynamically linked unixODBC manager on Linux
   PHPSFX_SWOOLE_SRC_REF          Swoole source tag/commit, default v6.2.5
   PHPSFX_MICRO_SPC_DIR           Per-build static-php-cli checkout directory
   PHPSFX_MICRO_SKIP_DOCTOR      Set to 1 when the host build tools are preinstalled
@@ -146,6 +150,46 @@ if (file_put_contents($path, $json) === false) {
   echo 'Trimmed native PDO dependencies and selected static pkg-config for pdo_pgsql' >&2
 }
 
+patch_dynamic_odbc_builder() {
+  [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${MICRO_DYNAMIC_ODBC}" == 1 ]] || return 0
+
+  # The pinned static-php-cli release defaults Linux to a pure-musl link and
+  # builds unixODBC with --disable-shared. Keep PHP/Swoole/extensions static,
+  # but let the Linux ODBC experiment use glibc and expose libodbc.so.2.
+  local linux_builder="${SPC_DIR}/src/SPC/builder/linux/LinuxBuilder.php"
+  local autoconf_executor="${SPC_DIR}/src/SPC/util/executor/UnixAutoconfExecutor.php"
+  [[ -f "${linux_builder}" && -f "${autoconf_executor}" ]] || {
+    echo "Pinned static-php-cli layout does not expose the Linux ODBC patch points" >&2
+    return 1
+  }
+
+  php -r '
+$path = $argv[1];
+$source = file_get_contents($path);
+$search = "            (\$enableMicro ? \x27--enable-micro=all-static \x27 : \x27--disable-micro \x27) .";
+$replace = "            (\$enableMicro ? (getenv(\x27PHPSFX_MICRO_DYNAMIC_ODBC\x27) === \x271\x27 ? \x27--enable-micro \x27 : \x27--enable-micro=all-static \x27) : \x27--disable-micro \x27) .";
+if (substr_count($source, $search) !== 1) {
+    throw new RuntimeException("Unexpected LinuxBuilder micro configure anchor");
+}
+$source = str_replace($search, $replace, $source);
+file_put_contents($path, $source);
+' "${linux_builder}"
+
+  php -r '
+$path = $argv[1];
+$source = file_get_contents($path);
+$search = "            \x27--enable-static\x27,\n            \x27--disable-shared\x27,";
+$replace = "            getenv(\x27PHPSFX_MICRO_DYNAMIC_ODBC\x27) === \x271\x27 && \$this->library->getName() === \x27unixodbc\x27 ? \x27--enable-shared\x27 : \x27--disable-shared\x27,\n            \x27--enable-static\x27,";
+if (substr_count($source, $search) !== 1) {
+    throw new RuntimeException("Unexpected UnixAutoconfExecutor configure anchor");
+}
+$source = str_replace($search, $replace, $source);
+file_put_contents($path, $source);
+' "${autoconf_executor}"
+
+  echo "Configured dynamic Linux unixODBC for micro ODBC" >&2
+}
+
 for command in git php composer tar; do
   require_command "${command}"
 done
@@ -164,6 +208,19 @@ fi
 git -C "${SPC_DIR}" fetch --force --depth=1 origin "${SPC_REF}"
 git -C "${SPC_DIR}" checkout --force FETCH_HEAD
 SPC_COMMIT=$(git -C "${SPC_DIR}" rev-parse HEAD)
+
+if [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${MICRO_DYNAMIC_ODBC}" == 1 ]]; then
+  if [[ -z "${MICRO_SPC_TARGET}" ]]; then
+    case "${PLATFORM}" in
+      linux-x64) MICRO_SPC_TARGET=x86_64-linux-gnu.2.17 ;;
+      linux-a64) MICRO_SPC_TARGET=aarch64-linux-gnu.2.17 ;;
+    esac
+  fi
+  export SPC_TARGET="${MICRO_SPC_TARGET}"
+  export PHPSFX_MICRO_DYNAMIC_ODBC=1
+fi
+
+patch_dynamic_odbc_builder
 
 composer install --working-dir="${SPC_DIR}" --no-dev --no-interaction --no-progress --prefer-dist
 
@@ -237,6 +294,11 @@ if [[ "${DISABLE_OPCACHE_JIT}" == 1 ]]; then
 else
   OPCACHE_JIT_JSON=true
 fi
+if [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${MICRO_DYNAMIC_ODBC}" == 1 ]]; then
+  MICRO_DYNAMIC_ODBC_JSON=true
+else
+  MICRO_DYNAMIC_ODBC_JSON=false
+fi
 cat > "${DIST_DIR}/build-meta-${PHP_VERSION}-${PLATFORM}-${DB_VARIANT}.json" <<META
 {
   "runtime": "micro",
@@ -254,6 +316,8 @@ cat > "${DIST_DIR}/build-meta-${PHP_VERSION}-${PLATFORM}-${DB_VARIANT}.json" <<M
   "micro_spc_repo": "${SPC_REPO}",
   "micro_spc_ref": "${SPC_REF}",
   "micro_spc_commit": "${SPC_COMMIT}",
+  "micro_spc_target": "${SPC_TARGET:-}",
+  "micro_dynamic_odbc": ${MICRO_DYNAMIC_ODBC_JSON},
   "swoole_src_ref": "${SWOOLE_SRC_REF}",
   "extensions": "${MICRO_EXTENSIONS}",
   "required_extensions": "${EXPECTED_EXTENSIONS}",
