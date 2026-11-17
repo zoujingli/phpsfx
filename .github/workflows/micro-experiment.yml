@@ -202,7 +202,13 @@ jobs:
       - name: Test micro PHP and Phar packaging
         if: steps.build.outcome == 'success'
         run: |
-          bash scripts/test-micro-packaging.sh "${PHPSFX_DIST_DIR}/micro-sfx-php${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}"
+          case "${PHPSFX_PLATFORM}" in
+            linux-x64) asset_platform=linux.x64 ;;
+            linux-a64) asset_platform=linux.a64 ;;
+            macos-a64) asset_platform=macos.a64 ;;
+            *) echo "Unsupported platform: ${PHPSFX_PLATFORM}" >&2; exit 2 ;;
+          esac
+          bash scripts/test-micro-packaging.sh "${PHPSFX_DIST_DIR}/${asset_platform}.${PHPSFX_DB_VARIANT}.sfx"
 
       - name: Test Hyperf 3.2 micro Phar
         if: steps.build.outcome == 'success'
@@ -210,7 +216,13 @@ jobs:
           PHPSFX_EXPECTED_SWOOLE_VERSION: ${{ inputs.swoole_src_ref || '6.2.5' }}
           PHPSFX_ODBC_SMOKE_DRIVER: ${{ matrix.odbc == '1' && 'SQLite3' || '' }}
         run: |
-          bash scripts/test-hyperf-micro-phar.sh "${PHPSFX_DIST_DIR}/micro-sfx-php${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}"
+          case "${PHPSFX_PLATFORM}" in
+            linux-x64) asset_platform=linux.x64 ;;
+            linux-a64) asset_platform=linux.a64 ;;
+            macos-a64) asset_platform=macos.a64 ;;
+            *) echo "Unsupported platform: ${PHPSFX_PLATFORM}" >&2; exit 2 ;;
+          esac
+          bash scripts/test-hyperf-micro-phar.sh "${PHPSFX_DIST_DIR}/${asset_platform}.${PHPSFX_DB_VARIANT}.sfx"
 
       - name: Upload micro experiment artifact
         if: always()

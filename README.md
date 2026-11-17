@@ -444,12 +444,12 @@ bash scripts/build-micro-sfx.sh linux-x64
 # Linux ARM64 使用：bash scripts/build-micro-sfx.sh linux-a64
 ```
 
-构建产物位于 `dist/micro-<php>-<platform>-<variant>/`，文件名为 `micro-sfx-php<php>-<platform>-<variant>`。构建脚本会写入独立元数据和 `SHA256SUMS`，并在复制后执行版本、扩展、单 PDO 集合、ODBC 动态依赖和 Phar smoke 校验。
+构建产物位于 `dist/micro-<php>-<platform>-<variant>/`，文件名为 `<platform>.<variant>.sfx`。构建脚本会写入独立元数据和 `SHA256SUMS`，并在复制后执行版本、扩展、单 PDO 集合、ODBC 动态依赖和 Phar smoke 校验。
 
 把应用 Phar 打包为可直接执行文件：
 
 ```bash
-MICRO=dist/micro-8.5-macos-a64-mysql/micro-sfx-php8.5-macos-a64-mysql
+MICRO=dist/micro-8.5-macos-a64-mysql/macos.a64.mysql.sfx
 bash scripts/pack-micro-phar.sh \
   "$MICRO" app.phar build/micro-app \
   --ini memory_limit=512M \

@@ -193,7 +193,13 @@ fi
 MICRO_SFX="${SPC_DIR}/buildroot/bin/micro.sfx"
 [[ -s "${MICRO_SFX}" ]] || { echo "micro.sfx was not generated: ${MICRO_SFX}" >&2; exit 1; }
 
-ASSET_NAME="micro-sfx-php${PHP_VERSION}-${PLATFORM}-${DB_VARIANT}"
+case "${PLATFORM}" in
+  linux-x64) ASSET_PLATFORM=linux.x64 ;;
+  linux-a64) ASSET_PLATFORM=linux.a64 ;;
+  macos-a64) ASSET_PLATFORM=macos.a64 ;;
+  *) echo "Unsupported asset platform: ${PLATFORM}" >&2; exit 2 ;;
+esac
+ASSET_NAME="${ASSET_PLATFORM}.${DB_VARIANT}.sfx"
 ASSET_PATH="${DIST_DIR}/${ASSET_NAME}"
 cp "${MICRO_SFX}" "${ASSET_PATH}"
 chmod +x "${ASSET_PATH}"

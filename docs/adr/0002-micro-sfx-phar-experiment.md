@@ -64,7 +64,7 @@ PHPSFX_PHP_VERSION=8.5 PHPSFX_DB_VARIANT=mysql \
 PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1 \
 bash scripts/build-micro-sfx.sh macos-a64
 bash scripts/pack-micro-phar.sh \
-  dist/micro-8.5-macos-a64-mysql/micro-sfx-php8.5-macos-a64-mysql \
+  dist/micro-8.5-macos-a64-mysql/macos.a64.mysql.sfx \
   app.phar build/app --ini memory_limit=512M
 ./build/app
 ```
