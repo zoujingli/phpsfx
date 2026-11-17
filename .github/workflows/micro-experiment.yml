@@ -1,6 +1,9 @@
 name: Micro SFX Phar experiment
 
 on:
+  push:
+    branches:
+      - micro.sfx
   workflow_dispatch:
     inputs:
       spc_ref:
@@ -70,6 +73,7 @@ jobs:
       PHPSFX_MICRO_SPC_REF: ${{ inputs.spc_ref || '956fa13e7c390e3127cc0343215c00491f13a835' }}
       PHPSFX_SWOOLE_SRC_REF: ${{ inputs.swoole_src_ref || 'v6.2.5' }}
       PHPSFX_MICRO_SKIP_DOCTOR: '1'
+      PHPSFX_MICRO_DISABLE_OPCACHE_JIT: '1'
       PHPSFX_MICRO_SPC_DIR: ${{ github.workspace }}/.build/static-php-cli-micro-${{ matrix.php }}-${{ matrix.platform }}-${{ matrix.database }}
       PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/micro-${{ matrix.php }}-${{ matrix.platform }}-${{ matrix.database }}
 

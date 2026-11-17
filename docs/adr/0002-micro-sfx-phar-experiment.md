@@ -44,6 +44,12 @@ Linux ODBC 必须保留 `libodbc.so.2` 动态依赖。如果 static-php-cli 默�
 
 用同一个最小测试 Phar 追加到两种 SFX 后，结论一致：8.4.27 的 micro 文件为 34,601,168 bytes，Swoole CLI 为 36,793,256 bytes，减少 2,192,088 bytes（-5.96%）；8.5.12 的 micro 文件为 43,217,344 bytes，Swoole CLI 为 39,721,864 bytes，增加 3,495,480 bytes（+8.80%）。两种生成文件分别以直接执行和 `--self` 执行，均输出预期的 PHP 版本、`cli` SAPI、Phar 内容和对应运行时标识。
 
+## PHP 能力裁剪记录
+
+当前 dmskc2 的 `composer.json` 明确要求 bcmath、bz2、curl、DOM、fileinfo、GD、mbstring、OpenSSL、OPcache、pcntl、PDO/MySQL、posix、Redis、SimpleXML、sockets、sodium、tokenizer、XML、XMLReader、XMLWriter、Zip 和 zlib；源码还实际使用 ctype、filter、iconv、Phar、Sodium、ZipArchive、GD、pcntl 与 posix。这些能力继续保留。phpdbg、PHP debug build、Xdebug、原生 pgsql、SQLite3、mysqli、session、soap、readline、intl、imagick、gmp 和 mongodb 已经排除。
+
+生产 dmskc2 只声明 `pdo_mysql`；`pdo_pgsql` 和 `pdo_sqlite` 仍保留在开发代表包中，后续可用 `PHPSFX_DB_VARIANT=mysql` 单独构建生产包。当前 static-php-cli 默认编译 OPcache JIT，但 dmskc2 的 SFX 打包配置把 CLI OPcache 关闭，因此实验链从本次起默认传入 `--disable-opcache-jit`。JIT 关闭后的实际字节差异必须以同一版本重建和 Phar smoke 结果为准。
+
 ## 体积与兼容性边界
 
 micro 与 Swoole CLI 的运行时基线、SFX 格式和组件构建器不同。历史约 31 MB 的 micro 产物使用的是旧 PHP/Swoole 和旧扩展集，不能直接作为当前体积预估。实验必须使用同一测试 Phar，分别记录运行时和打包后文件大小，再与当前 Swoole CLI 代表产物比较。

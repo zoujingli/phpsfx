@@ -40,6 +40,7 @@ DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist/micro-${PHP_VERSION}-${PLATFORM}-$
 SKIP_DOCTOR=${PHPSFX_MICRO_SKIP_DOCTOR:-0}
 PREFER_PREBUILT=${PHPSFX_MICRO_PREFER_PREBUILT:-0}
 TRIM_NATIVE_PDO_EXTENSIONS=${PHPSFX_MICRO_TRIM_NATIVE_PDO_EXTENSIONS:-1}
+DISABLE_OPCACHE_JIT=${PHPSFX_MICRO_DISABLE_OPCACHE_JIT:-1}
 MICRO_EXTENSIONS=${PHPSFX_MICRO_EXTENSIONS:-${PHPSFX_EXTENSIONS:-}}
 EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,phar,zlib}
 FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-}
@@ -55,7 +56,7 @@ Platforms:
 Important environment variables:
   PHPSFX_PHP_VERSION             PHP version line, 8.4 or 8.5
   PHPSFX_PHP_FULL_VERSION        Exact PHP version, 8.4.27 or 8.5.12
-  PHPSFX_DB_VARIANT              sqlite-mysql-pgsql or odbc
+  PHPSFX_DB_VARIANT              mysql, sqlite-mysql-pgsql or odbc
   PHPSFX_PROFILE_FILE            Current phpsfx profile file
   PHPSFX_MICRO_SPC_REF           Pinned static-php-cli commit
   PHPSFX_SWOOLE_SRC_REF          Swoole source tag/commit, default v6.2.5
@@ -63,6 +64,7 @@ Important environment variables:
   PHPSFX_MICRO_SKIP_DOCTOR      Set to 1 when the host build tools are preinstalled
   PHPSFX_MICRO_PREFER_PREBUILT  Set to 1 to use static-php-cli hosted packages
   PHPSFX_MICRO_TRIM_NATIVE_PDO_EXTENSIONS  Keep PDO drivers without pgsql/sqlite3 extensions
+  PHPSFX_MICRO_DISABLE_OPCACHE_JIT         Disable unused OPcache JIT code generation (default: 1)
   PHPSFX_DIST_DIR                Output directory
 USAGE
 }
@@ -102,6 +104,11 @@ append_extension() {
 
 # Current swoole-cli always carries mysqlnd and enables the Swoole MySQL hook;
 # it is an internal addon and does not add an extra PDO driver.
+case "${DISABLE_OPCACHE_JIT}" in
+  0|1) ;;
+  *) echo "PHPSFX_MICRO_DISABLE_OPCACHE_JIT must be 0 or 1" >&2; exit 2 ;;
+esac
+
 append_extension swoole-hook-mysql
 if [[ "${SWOOLE_ODBC_ENABLED}" == 1 ]]; then
   append_extension swoole-hook-odbc
@@ -171,7 +178,11 @@ if [[ "${PREFER_PREBUILT}" == 1 ]]; then
 fi
 ./bin/spc download "${DOWNLOAD_ARGS[@]}"
 patch_native_pdo_dependencies
-./bin/spc build "${MICRO_EXTENSIONS}" --build-micro --with-micro-fake-cli
+BUILD_ARGS=("${MICRO_EXTENSIONS}" --build-micro --with-micro-fake-cli)
+if [[ "${DISABLE_OPCACHE_JIT}" == 1 ]]; then
+  BUILD_ARGS+=(--disable-opcache-jit)
+fi
+./bin/spc build "${BUILD_ARGS[@]}"
 
 MICRO_SFX="${SPC_DIR}/buildroot/bin/micro.sfx"
 [[ -s "${MICRO_SFX}" ]] || { echo "micro.sfx was not generated: ${MICRO_SFX}" >&2; exit 1; }
@@ -209,6 +220,11 @@ if [[ "${SWOOLE_ODBC_ENABLED}" == 1 ]]; then
 else
   SWOOLE_ODBC_JSON=false
 fi
+if [[ "${DISABLE_OPCACHE_JIT}" == 1 ]]; then
+  OPCACHE_JIT_JSON=false
+else
+  OPCACHE_JIT_JSON=true
+fi
 cat > "${DIST_DIR}/build-meta-${PHP_VERSION}-${PLATFORM}-${DB_VARIANT}.json" <<META
 {
   "runtime": "micro",
@@ -232,6 +248,7 @@ cat > "${DIST_DIR}/build-meta-${PHP_VERSION}-${PLATFORM}-${DB_VARIANT}.json" <<M
   "forbidden_extensions": "${FORBIDDEN_EXTENSIONS}",
   "required_pdo_drivers": "${REQUIRED_PDO_DRIVERS}",
   "swoole_odbc": ${SWOOLE_ODBC_JSON},
+  "opcache_jit": ${OPCACHE_JIT_JSON},
   "odbc_dynamic_dependency": "${ODBC_DYNAMIC_DEPENDENCY}",
   "sfx_size": ${SFX_SIZE},
   "sha256": "${SHA256}",
