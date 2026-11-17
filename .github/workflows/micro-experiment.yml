@@ -72,7 +72,7 @@ jobs:
       PHPSFX_PROFILE_FILE: ${{ matrix.profile }}
       PHPSFX_MICRO_SPC_REF: ${{ inputs.spc_ref || '956fa13e7c390e3127cc0343215c00491f13a835' }}
       PHPSFX_SWOOLE_SRC_REF: ${{ inputs.swoole_src_ref || 'v6.2.5' }}
-      PHPSFX_MICRO_SKIP_DOCTOR: '1'
+      PHPSFX_MICRO_SKIP_DOCTOR: '0'
       PHPSFX_MICRO_DISABLE_OPCACHE_JIT: '1'
       PHPSFX_MICRO_SPC_DIR: ${{ github.workspace }}/.build/static-php-cli-micro-${{ matrix.php }}-${{ matrix.platform }}-${{ matrix.database }}
       PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/micro-${{ matrix.php }}-${{ matrix.platform }}-${{ matrix.database }}

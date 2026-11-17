@@ -162,7 +162,7 @@ SPC_COMMIT=$(git -C "${SPC_DIR}" rev-parse HEAD)
 composer install --working-dir="${SPC_DIR}" --no-dev --no-interaction --no-progress --prefer-dist
 
 cd "${SPC_DIR}"
-if [[ "${PLATFORM}" == macos-a64 && "${SKIP_DOCTOR}" != 1 ]]; then
+if [[ "${SKIP_DOCTOR}" != 1 ]]; then
   "${SPC_DIR}/bin/spc" doctor --auto-fix
 fi
 
