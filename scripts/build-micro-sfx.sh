@@ -259,7 +259,7 @@ insert = r'''        if (getenv('PHPSFX_MICRO_DYNAMIC_ODBC') === '1' && PHP_OS_F
                         throw new \RuntimeException("Unable to create unixODBC link placeholder: {$archive}");
                     }
                 }
-                $pc = "prefix={$root}\nlibdir={$lib}\nincludedir={$include}\nName: unixODBC {$library}\nVersion: 2.3.12\nLibs: -l{$library}\nCflags: -I{$include}\n";
+                $pc = "prefix={$root}\nlibdir={$lib}\nincludedir={$include}\nName: unixODBC {$library}\nDescription: unixODBC driver manager\nVersion: 2.3.12\nLibs: -l{$library}\nCflags: -I{$include}\n";
                 if (file_put_contents($pkgconfig . '/' . $library . '.pc', $pc) === false) {
                     throw new \RuntimeException("Unable to write unixODBC pkg-config file: {$library}");
                 }
