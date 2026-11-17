@@ -226,6 +226,7 @@ insert = r'''        if (getenv('PHPSFX_MICRO_DYNAMIC_ODBC') === '1' && PHP_OS_F
             $include = $root . '/include';
             $lib = $root . '/lib';
             $pkgconfig = $lib . '/pkgconfig';
+            putenv('PKG_CONFIG_PATH=' . $pkgconfig . ':' . (getenv('PKG_CONFIG_PATH') ?: ''));
             foreach ([$include, $lib, $pkgconfig] as $directory) {
                 if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
                     throw new \RuntimeException("Unable to create unixODBC staging directory: {$directory}");
