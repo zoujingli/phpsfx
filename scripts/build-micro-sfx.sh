@@ -248,6 +248,9 @@ insert = r'''        if (getenv('PHPSFX_MICRO_DYNAMIC_ODBC') === '1' && PHP_OS_F
                         break;
                     }
                 }
+                if ($source === '') {
+                    $source = trim((string) shell_exec('find /usr/include /usr/local/include -type f -name ' . escapeshellarg($header) . ' -print -quit 2>/dev/null'));
+                }
                 if ($source === '' || !copy($source, $include . '/' . $header)) {
                     throw new \RuntimeException("Missing system unixODBC header: {$header}");
                 }
