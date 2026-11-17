@@ -232,7 +232,7 @@ insert = r'''        if (getenv('PHPSFX_MICRO_DYNAMIC_ODBC') === '1' && PHP_OS_F
                     throw new \RuntimeException("Unable to create unixODBC staging directory: {$directory}");
                 }
             }
-            foreach (['sql.h', 'sqlext.h', 'sqltypes.h', 'odbcinst.h'] as $header) {
+            foreach (['odbc.h', 'sql.h', 'sqlext.h', 'sqltypes.h', 'odbcinst.h'] as $header) {
                 $source = '/usr/include/' . $header;
                 if (!is_file($source) || !copy($source, $include . '/' . $header)) {
                     throw new \RuntimeException("Missing system unixODBC header: {$source}");
