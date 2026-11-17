@@ -50,6 +50,27 @@ Linux ODBC 必须保留 `libodbc.so.2` 动态依赖。如果 static-php-cli 默�
 
 生产 dmskc2 只声明 `pdo_mysql`；`pdo_pgsql` 和 `pdo_sqlite` 仍保留在开发代表包中，后续可用 `PHPSFX_DB_VARIANT=mysql` 单独构建生产包。当前 static-php-cli 默认编译 OPcache JIT，但 dmskc2 的 SFX 打包配置把 CLI OPcache 关闭，因此实验链从本次起默认传入 `--disable-opcache-jit`。JIT 关闭后的实际字节差异必须以同一版本重建和 Phar smoke 结果为准。
 
+## 分支、构建和运行入口
+
+实验代码位于远程 `micro.sfx` 分支，构建入口是 `scripts/build-micro-sfx.sh`，Phar 入口是 `scripts/pack-micro-phar.sh`。分支的 `push` 事件会运行 `.github/workflows/micro-experiment.yml`；该 workflow 只保存每个代表构建的 Actions artifact 和合并证据，不创建 GitHub Release，不修改 `swoole-cli` 分支，也不复制现有 24 个生产资产。
+
+构建变体由 `PHPSFX_DB_VARIANT` 选择：`mysql` 是生产 MySQL-only 试验包，`sqlite-mysql-pgsql` 是开发包，`odbc` 是 Linux ODBC-only 试验包。开发包继续保留 SQLite/MySQL/PostgreSQL PDO；ODBC 包通过 `PHPSFX_SWOOLE_ODBC=1` 启用 Swoole 协程 ODBC，并要求 Linux 运行时动态依赖 `libodbc.so.2`。`PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1` 是默认值，关闭 dmskc2 不使用的 JIT 代码生成，但保留 OPcache 扩展本身。
+
+最小运行流程如下：
+
+```bash
+PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-slim.env \
+PHPSFX_PHP_VERSION=8.5 PHPSFX_DB_VARIANT=sqlite-mysql-pgsql \
+PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1 \
+bash scripts/build-micro-sfx.sh macos-a64
+bash scripts/pack-micro-phar.sh \
+  dist/micro-8.5-macos-a64-sqlite-mysql-pgsql/micro-sfx-php8.5-macos-a64-sqlite-mysql-pgsql \
+  app.phar build/app --ini memory_limit=512M
+./build/app
+```
+
+micro 直接执行 Phar，不接受 Swoole CLI 的 `--self` 入口；INI 注入块、Phar stub、外部可写目录和静态资源读取边界见本 ADR 的格式说明。
+
 ## 体积与兼容性边界
 
 micro 与 Swoole CLI 的运行时基线、SFX 格式和组件构建器不同。历史约 31 MB 的 micro 产物使用的是旧 PHP/Swoole 和旧扩展集，不能直接作为当前体积预估。实验必须使用同一测试 Phar，分别记录运行时和打包后文件大小，再与当前 Swoole CLI 代表产物比较。
