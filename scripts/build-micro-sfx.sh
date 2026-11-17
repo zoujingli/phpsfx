@@ -149,7 +149,7 @@ if (file_put_contents($path, $json) === false) {
 for command in git php composer tar; do
   require_command "${command}"
 done
-if [[ "${PLATFORM}" == linux-x64 ]]; then
+if [[ "${PLATFORM}" == linux-* ]]; then
   require_command readelf
 else
   require_command otool
