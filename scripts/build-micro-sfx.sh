@@ -212,7 +212,7 @@ if (substr_count($source, $search) !== 1) {
 file_put_contents($path, str_replace($search, $replace, $source));
 ' "${zig_toolchain}"
 
-  python3 - "${unixodbc_builder}" <<'PY'
+  python3 - "${unixodbc_builder}" "${linux_builder}" <<'PY'
 from pathlib import Path
 import sys
 
@@ -290,6 +290,19 @@ insert = r'''        if (getenv('PHPSFX_MICRO_DYNAMIC_ODBC') === '1' && PHP_OS_F
 if source.count(needle) != 1:
     raise SystemExit(f'unexpected unixODBC build anchor: {source.count(needle)}')
 path.write_text(source.replace(needle, needle + insert, 1))
+
+linux_path = Path(sys.argv[2])
+linux_source = linux_path.read_text()
+linux_needle = """            shell()->cd(SOURCE_PATH . '/php-src')
+                ->exec('sed -i \"s|//lib|/lib|g\" Makefile')
+                ->exec(\"make {$concurrency} {$vars} micro\");"""
+linux_insert = """            shell()->cd(SOURCE_PATH . '/php-src')
+                ->exec('sed -i \"s|//lib|/lib|g\" Makefile')
+                ->exec(\"sed -i 's|-Wl,-Bstatic,-lresolv,-Bdynamic|-lresolv|g' Makefile\")
+                ->exec(\"make {$concurrency} {$vars} micro\");"""
+if linux_source.count(linux_needle) != 1:
+    raise SystemExit(f'unexpected LinuxBuilder micro make anchor: {linux_source.count(linux_needle)}')
+linux_path.write_text(linux_source.replace(linux_needle, linux_insert, 1))
 PY
 
   echo "Configured dynamic Linux unixODBC for micro ODBC" >&2
