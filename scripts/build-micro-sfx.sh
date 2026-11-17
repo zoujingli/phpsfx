@@ -39,6 +39,7 @@ SPC_DIR=${PHPSFX_MICRO_SPC_DIR:-"${ROOT_DIR}/.build/static-php-cli-micro-${PHP_V
 DIST_DIR=${PHPSFX_DIST_DIR:-"${ROOT_DIR}/dist/micro-${PHP_VERSION}-${PLATFORM}-${DB_VARIANT}"}
 SKIP_DOCTOR=${PHPSFX_MICRO_SKIP_DOCTOR:-0}
 PREFER_PREBUILT=${PHPSFX_MICRO_PREFER_PREBUILT:-0}
+TRIM_NATIVE_PDO_EXTENSIONS=${PHPSFX_MICRO_TRIM_NATIVE_PDO_EXTENSIONS:-1}
 MICRO_EXTENSIONS=${PHPSFX_MICRO_EXTENSIONS:-${PHPSFX_EXTENSIONS:-}}
 EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,phar,zlib}
 FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-}
@@ -61,6 +62,7 @@ Important environment variables:
   PHPSFX_MICRO_SPC_DIR           Per-build static-php-cli checkout directory
   PHPSFX_MICRO_SKIP_DOCTOR      Set to 1 when the host build tools are preinstalled
   PHPSFX_MICRO_PREFER_PREBUILT  Set to 1 to use static-php-cli hosted packages
+  PHPSFX_MICRO_TRIM_NATIVE_PDO_EXTENSIONS  Keep PDO drivers without pgsql/sqlite3 extensions
   PHPSFX_DIST_DIR                Output directory
 USAGE
 }
@@ -105,6 +107,26 @@ if [[ "${SWOOLE_ODBC_ENABLED}" == 1 ]]; then
   append_extension swoole-hook-odbc
 fi
 
+patch_native_pdo_dependencies() {
+  [[ "${TRIM_NATIVE_PDO_EXTENSIONS}" == 1 ]] || return 0
+  local config_path="${SPC_DIR}/config/ext.json"
+  php -r '
+$path = $argv[1];
+$data = json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+foreach (["pdo_pgsql" => "pgsql", "pdo_sqlite" => "sqlite3"] as $extension => $native) {
+    if (!isset($data[$extension]["ext-depends"]) || !is_array($data[$extension]["ext-depends"])) {
+        throw new RuntimeException("Missing ext-depends for {$extension}");
+    }
+    $data[$extension]["ext-depends"] = array_values(array_diff($data[$extension]["ext-depends"], [$native]));
+}
+$json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+if (file_put_contents($path, $json) === false) {
+    throw new RuntimeException("Unable to write {$path}");
+}
+' "${config_path}"
+  echo 'Trimmed static-php-cli native pgsql/sqlite3 dependencies from PDO extensions' >&2
+}
+
 for command in git php composer tar; do
   require_command "${command}"
 done
@@ -126,11 +148,11 @@ SPC_COMMIT=$(git -C "${SPC_DIR}" rev-parse HEAD)
 
 composer install --working-dir="${SPC_DIR}" --no-dev --no-interaction --no-progress --prefer-dist
 
+cd "${SPC_DIR}"
 if [[ "${PLATFORM}" == macos-a64 && "${SKIP_DOCTOR}" != 1 ]]; then
   "${SPC_DIR}/bin/spc" doctor --auto-fix
 fi
 
-cd "${SPC_DIR}"
 DOWNLOAD_ARGS=(
   "--with-php=${PHP_FULL_VERSION}"
   "--for-extensions=${MICRO_EXTENSIONS}"
@@ -142,6 +164,7 @@ if [[ "${PREFER_PREBUILT}" == 1 ]]; then
   DOWNLOAD_ARGS+=(--prefer-pre-built)
 fi
 ./bin/spc download "${DOWNLOAD_ARGS[@]}"
+patch_native_pdo_dependencies
 ./bin/spc build "${MICRO_EXTENSIONS}" --build-micro --with-micro-fake-cli
 
 MICRO_SFX="${SPC_DIR}/buildroot/bin/micro.sfx"
