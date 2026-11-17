@@ -158,7 +158,8 @@ patch_dynamic_odbc_builder() {
   # but let the Linux ODBC experiment use glibc and expose libodbc.so.2.
   local linux_builder="${SPC_DIR}/src/SPC/builder/linux/LinuxBuilder.php"
   local autoconf_executor="${SPC_DIR}/src/SPC/util/executor/UnixAutoconfExecutor.php"
-  [[ -f "${linux_builder}" && -f "${autoconf_executor}" ]] || {
+  local zig_toolchain="${SPC_DIR}/src/SPC/toolchain/ZigToolchain.php"
+  [[ -f "${linux_builder}" && -f "${autoconf_executor}" && -f "${zig_toolchain}" ]] || {
     echo "Pinned static-php-cli layout does not expose the Linux ODBC patch points" >&2
     return 1
   }
@@ -198,6 +199,17 @@ if (substr_count($source, $search) !== 1) {
 $source = str_replace($search, $replace, $source);
 file_put_contents($path, $source);
 ' "${linux_builder}"
+
+  php -r '
+$path = $argv[1];
+$source = file_get_contents($path);
+$search = "        GlobalEnvManager::putenv(\x27SPC_LINUX_DEFAULT_LD=zig-ld.lld\x27);";
+$replace = "        GlobalEnvManager::putenv(\x27SPC_LINUX_DEFAULT_LD=\x27 . (getenv(\x27PHPSFX_MICRO_DYNAMIC_ODBC\x27) === \x271\x27 ? \x27zig-cc\x27 : \x27zig-ld.lld\x27));";
+if (substr_count($source, $search) !== 1) {
+    throw new RuntimeException("Unexpected ZigToolchain LD anchor");
+}
+file_put_contents($path, str_replace($search, $replace, $source));
+' "${zig_toolchain}"
 
   echo "Configured dynamic Linux unixODBC for micro ODBC" >&2
 }
