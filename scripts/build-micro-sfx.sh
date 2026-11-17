@@ -257,7 +257,15 @@ BUILD_ARGS=("${MICRO_EXTENSIONS}" --build-micro --with-micro-fake-cli)
 if [[ "${DISABLE_OPCACHE_JIT}" == 1 ]]; then
   BUILD_ARGS+=(--disable-opcache-jit)
 fi
-./bin/spc build "${BUILD_ARGS[@]}"
+if ! ./bin/spc build "${BUILD_ARGS[@]}"; then
+  for build_log in "${SPC_DIR}/log/spc.output.log" "${SPC_DIR}/log/spc.shell.log"; do
+    if [[ -f "${build_log}" ]]; then
+      echo "--- static-php-cli failure log: ${build_log} ---" >&2
+      tail -n 240 "${build_log}" >&2 || true
+    fi
+  done
+  exit 1
+fi
 
 MICRO_SFX="${SPC_DIR}/buildroot/bin/micro.sfx"
 [[ -s "${MICRO_SFX}" ]] || { echo "micro.sfx was not generated: ${MICRO_SFX}" >&2; exit 1; }
