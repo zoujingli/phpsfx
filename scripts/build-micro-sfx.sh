@@ -119,12 +119,18 @@ foreach (["pdo_pgsql" => "pgsql", "pdo_sqlite" => "sqlite3"] as $extension => $n
     }
     $data[$extension]["ext-depends"] = array_values(array_diff($data[$extension]["ext-depends"], [$native]));
 }
+// Let PHP use static pkg-config for libpq. Passing the PostgreSQL prefix makes
+// PHP fall back to pg_config and emits only -lpq, which omits libpgcommon and
+// libpgport from static links on current PostgreSQL releases.
+if (isset($data["pdo_pgsql"]) && ($data["pdo_pgsql"]["arg-type"] ?? null) === "with-path") {
+    $data["pdo_pgsql"]["arg-type"] = "with";
+}
 $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
 if (file_put_contents($path, $json) === false) {
     throw new RuntimeException("Unable to write {$path}");
 }
 ' "${config_path}"
-  echo 'Trimmed static-php-cli native pgsql/sqlite3 dependencies from PDO extensions' >&2
+  echo 'Trimmed native PDO dependencies and selected static pkg-config for pdo_pgsql' >&2
 }
 
 for command in git php composer tar; do

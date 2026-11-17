@@ -22,7 +22,7 @@ micro.sfx + [0xfd 0xf6 0x69 0xe6 + big-endian INI length + INI data] + app.phar
 
 ## 组件与验证范围
 
-实验构建沿用当前 PHP 8.4.27、8.5.12、Swoole 6.2.5、Redis、Phar、PDO 和裁剪扩展集合。static-php-cli 默认会把 `pgsql`、`sqlite3` 作为 PDO 扩展依赖带入，实验构建显式移除这两条依赖，以保持当前 Swoole CLI 的 PDO 合同。代表矩阵为：
+实验构建沿用当前 PHP 8.4.27、8.5.12、Swoole 6.2.5、Redis、Phar、PDO 和裁剪扩展集合。static-php-cli 默认会把 `pgsql`、`sqlite3` 作为 PDO 扩展依赖带入，实验构建显式移除这两条依赖，以保持当前 Swoole CLI 的 PDO 合同。`pdo_pgsql` 同时改用无路径的 `--with-pdo-pgsql`，让 PHP 通过静态 `pkg-config` 带入 PostgreSQL 的 `libpgcommon` 与 `libpgport`；直接传 prefix 会退回 `pg_config` 并在 macOS 静态链接时漏掉这两个库。代表矩阵为：
 
 | PHP | 平台 | 变体 | 目的 |
 |------|------|------|------|
@@ -30,6 +30,17 @@ micro.sfx + [0xfd 0xf6 0x69 0xe6 + big-endian INI length + INI data] + app.phar
 | 8.4 / 8.5 | Linux x86_64 | `odbc` | ODBC hook、动态 unixODBC、事务并发 |
 
 Linux ODBC 必须保留 `libodbc.so.2` 动态依赖。如果 static-php-cli 默认静态 musl 链路无法满足该合同，workflow 保留失败日志并停止扩展，不通过放宽验证来掩盖差异。
+
+## 当前 macOS ARM64 体积实测
+
+以下比较使用同一个 `sqlite-mysql-pgsql` 变体：micro 由本分支本地构建，Swoole CLI 取已发布的 `v6.2.5.1` 对应资产。数值是可执行文件字节数，未包含 Phar 应用本身。
+
+| PHP | Swoole CLI | micro.sfx | 差值 | 相对变化 |
+|------|-----------:|----------:|-----:|---------:|
+| 8.4.27 | 36,792,928 | 34,600,848 | -2,192,080 | -5.96% |
+| 8.5.12 | 39,721,536 | 43,217,024 | +3,495,488 | +8.80% |
+
+因此 micro.sfx 的体积收益取决于 PHP 版本和构建器输入，不能按历史 micro 产物推断统一收益；8.5 代表包当前反而更大。
 
 ## 体积与兼容性边界
 
