@@ -255,12 +255,8 @@ jobs:
       - name: Merge metadata and checksums
         run: |
           set -eux
-          find evidence -type f -maxdepth 5 -print | sort
-          mapfile -t metadata < <(find evidence -name 'build-meta-*.json' -type f -print | sort)
-          if [ "${#metadata[@]}" -gt 0 ]; then
-            python3 scripts/merge-micro-meta.py evidence evidence/build-meta.json
-            find evidence -type f -perm -111 -print0 | xargs -0 sha256sum > evidence/SHA256SUMS
-          fi
+          python3 tests/test-merge-micro-meta.py
+          python3 scripts/merge-micro-meta.py evidence evidence/build-meta.json
 
       - name: Upload merged micro experiment evidence
         if: always()

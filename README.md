@@ -444,7 +444,20 @@ bash scripts/build-micro-sfx.sh linux-x64
 # Linux ARM64 使用：bash scripts/build-micro-sfx.sh linux-a64
 ```
 
-构建产物位于 `dist/micro-<php>-<platform>-<variant>/`，文件名为 `<platform>.<variant>.sfx`。构建脚本会写入独立元数据和 `SHA256SUMS`，并在复制后执行版本、扩展、单 PDO 集合、ODBC 动态依赖和 Phar smoke 校验。
+构建产物位于 `dist/micro-<php>-<platform>-<variant>/`。PHP 8.4 和 8.5 各自使用独立目录，每条线固定以下八个文件名：
+
+```text
+linux.x64.mysql.sfx
+linux.x64.pgsql.sfx
+linux.x64.odbc.sfx
+linux.a64.mysql.sfx
+linux.a64.pgsql.sfx
+linux.a64.odbc.sfx
+macos.a64.mysql.sfx
+macos.a64.pgsql.sfx
+```
+
+构建脚本写入独立元数据和 `SHA256SUMS`，并执行版本、扩展、单 PDO 集合和 ODBC 动态依赖校验；workflow 继续验证 Phar 打包与 Hyperf。合并 artifact 保留 PHP 版本目录，汇总元数据的 `asset_path` 和根目录 `SHA256SUMS` 使用相对路径，避免两条 PHP 线同名覆盖。汇总必须验证全部 16 个唯一构建及实际文件的大小、SHA-256；任何缺项均失败。从 Actions 下载后，先为所选 `.sfx` 执行 `chmod +x` 再打包。
 
 把应用 Phar 打包为可直接执行文件：
 
