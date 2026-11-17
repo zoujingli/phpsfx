@@ -20,9 +20,9 @@ case "${PHP_VERSION}" in
 esac
 
 case "${PLATFORM}" in
-  linux-x64|macos-a64) ;;
+  linux-x64|linux-a64|macos-a64) ;;
   *)
-    echo "This experiment currently supports linux-x64 and macos-a64: ${PLATFORM}" >&2
+    echo "This experiment currently supports linux-x64, linux-a64 and macos-a64: ${PLATFORM}" >&2
     exit 2
     ;;
 esac
@@ -106,14 +106,16 @@ append_extension() {
   esac
 }
 
-# Current swoole-cli always carries mysqlnd and enables the Swoole MySQL hook;
-# it is an internal addon and does not add an extra PDO driver.
+# Only the MySQL production variant carries mysqlnd and the Swoole MySQL hook;
+# the pgsql/odbc variants keep a strict single-PDO contract.
 case "${DISABLE_OPCACHE_JIT}" in
   0|1) ;;
   *) echo "PHPSFX_MICRO_DISABLE_OPCACHE_JIT must be 0 or 1" >&2; exit 2 ;;
 esac
 
-append_extension swoole-hook-mysql
+if [[ "${DB_VARIANT}" == mysql ]]; then
+  append_extension swoole-hook-mysql
+fi
 if [[ "${SWOOLE_ODBC_ENABLED}" == 1 ]]; then
   append_extension swoole-hook-odbc
 fi

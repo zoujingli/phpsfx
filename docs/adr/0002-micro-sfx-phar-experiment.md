@@ -22,7 +22,7 @@ micro.sfx + [0xfd 0xf6 0x69 0xe6 + big-endian INI length + INI data] + app.phar
 
 ## 组件与验证范围
 
-实验构建沿用当前 PHP 8.4.27、8.5.12、Swoole 6.2.5、Redis、Phar、PDO 和裁剪扩展集合。static-php-cli 默认会把 `pgsql`、`sqlite3` 作为 PDO 扩展依赖带入，实验构建显式移除这两条依赖，以保持当前 Swoole CLI 的 PDO 合同。`pdo_pgsql` 同时改用无路径的 `--with-pdo-pgsql`，让 PHP 通过静态 `pkg-config` 带入 PostgreSQL 的 `libpgcommon` 与 `libpgport`；直接传 prefix 会退回 `pg_config` 并在 macOS 静态链接时漏掉这两个库。代表矩阵为：
+实验构建沿用当前 PHP 8.4.27、8.5.12、Swoole 6.2.5、Redis、Phar、PDO 和裁剪扩展集合。mysql 变体启用 mysqlnd/Swoole MySQL hook，pgsql 与 odbc 变体保持严格单 PDO 集合。static-php-cli 默认会把 `pgsql`、`sqlite3` 作为 PDO 扩展依赖带入，实验构建显式移除这两条依赖，以保持当前 Swoole CLI 的 PDO 合同。`pdo_pgsql` 同时改用无路径的 `--with-pdo-pgsql`，让 PHP 通过静态 `pkg-config` 带入 PostgreSQL 的 `libpgcommon` 与 `libpgport`；直接传 prefix 会退回 `pg_config` 并在 macOS 静态链接时漏掉这两个库。代表矩阵为：
 
 | PHP | 平台 | 变体 | 目的 |
 |------|------|------|------|
