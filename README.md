@@ -356,6 +356,22 @@ chmod +x build/app
 bash scripts/test-packaging.sh swoole-cli-php8.5-linux-x64-mysql
 ```
 
+## micro.sfx + Phar 实验链
+
+`feat/micro-sfx-phar-experiment` 分支提供并行实验链，不改变当前 Swoole CLI Release。micro 的格式是 `micro.sfx + 可选 INI 块 + app.phar`，运行时直接执行生成文件，不使用 `--self`：
+
+```bash
+bash scripts/pack-micro-phar.sh \
+  micro.sfx \
+  app.phar \
+  build/micro-app \
+  --ini memory_limit=512M
+
+./build/micro-app
+```
+
+实验构建固定验证 PHP 8.4.27/8.5.12、Swoole 6.2.5 和当前 dmskc2 扩展集合，先覆盖 macOS ARM64 `sqlite-mysql-pgsql` 与 Linux x86_64 `odbc` 两个代表变体。micro 运行时通过 `--with-micro-fake-cli` 暴露 `PHP_SAPI=cli`，不提供 `SWOOLE_CLI` 或 Swoole CLI `--self` 行为；Phar 内的可写数据必须放在外部目录。Linux ODBC 仍要求 `libodbc.so.2` 动态依赖。实验 workflow 只上传 artifact，详情见 [micro.sfx + Phar ADR](docs/adr/0002-micro-sfx-phar-experiment.md)。
+
 
 ## 参考
 

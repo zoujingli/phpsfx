@@ -1,0 +1,182 @@
+name: Micro SFX Phar experiment
+
+on:
+  workflow_dispatch:
+    inputs:
+      spc_ref:
+        description: Pinned static-php-cli commit
+        required: true
+        default: 956fa13e7c390e3127cc0343215c00491f13a835
+        type: string
+      swoole_src_ref:
+        description: Swoole source tag or commit
+        required: true
+        default: v6.2.5
+        type: string
+      php84_full_version:
+        description: Exact PHP 8.4 version
+        required: true
+        default: 8.4.27
+        type: string
+      php85_full_version:
+        description: Exact PHP 8.5 version
+        required: true
+        default: 8.5.12
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Micro PHP ${{ matrix.php }} ${{ matrix.platform }}-${{ matrix.database }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.4'
+            platform: macos-a64
+            database: sqlite-mysql-pgsql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: macos-15
+          - php: '8.5'
+            platform: macos-a64
+            database: sqlite-mysql-pgsql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: macos-15
+          - php: '8.4'
+            platform: linux-x64
+            database: odbc
+            profile: scripts/profiles/hyperfadmin-odbc.env
+            odbc: '1'
+            runner: ubuntu-latest
+          - php: '8.5'
+            platform: linux-x64
+            database: odbc
+            profile: scripts/profiles/hyperfadmin-odbc.env
+            odbc: '1'
+            runner: ubuntu-latest
+    env:
+      PHPSFX_PLATFORM: ${{ matrix.platform }}
+      PHPSFX_PHP_VERSION: ${{ matrix.php }}
+      PHPSFX_PHP_FULL_VERSION: ${{ matrix.php == '8.4' && (inputs.php84_full_version || '8.4.27') || (inputs.php85_full_version || '8.5.12') }}
+      PHPSFX_DB_VARIANT: ${{ matrix.database }}
+      PHPSFX_SWOOLE_ODBC: ${{ matrix.odbc }}
+      PHPSFX_PROFILE_FILE: ${{ matrix.profile }}
+      PHPSFX_MICRO_SPC_REF: ${{ inputs.spc_ref || '956fa13e7c390e3127cc0343215c00491f13a835' }}
+      PHPSFX_SWOOLE_SRC_REF: ${{ inputs.swoole_src_ref || 'v6.2.5' }}
+      PHPSFX_MICRO_SKIP_DOCTOR: '1'
+      PHPSFX_MICRO_SPC_DIR: ${{ github.workspace }}/.build/static-php-cli-micro-${{ matrix.php }}-${{ matrix.platform }}-${{ matrix.database }}
+      PHPSFX_DIST_DIR: ${{ github.workspace }}/dist/micro-${{ matrix.php }}-${{ matrix.platform }}-${{ matrix.database }}
+
+    steps:
+      - name: Checkout experiment branch
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake autopoint binutils bison bzip2 ca-certificates clang clang-tools cmake coreutils curl diffutils \
+            flex g++ gcc gettext git libtool libtool-bin lld locales lzip make meson musl-tools nasm netcat-openbsd \
+            ninja-build p7zip-full pkg-config python3 python3-pip re2c tar unzip wget xz-utils yasm zip
+
+      - name: Install Linux ODBC dependencies
+        if: runner.os == 'Linux' && matrix.odbc == '1'
+        run: |
+          set -eux
+          sudo apt-get install -y libsqliteodbc unixodbc unixodbc-dev
+          odbcinst -q -d
+
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          set -eux
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install autoconf automake bison cmake coreutils flex gettext libtool meson nasm ninja pkg-config re2c xz yasm || true
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+          coverage: none
+          extensions: curl, openssl, mbstring, phar, zip, bz2
+          ini-values: memory_limit=-1, phar.readonly=0
+
+      - name: Install Hyperf smoke dependencies
+        run: |
+          set -eux
+          composer validate --working-dir=tests/hyperf-smoke --strict
+          composer install --working-dir=tests/hyperf-smoke --no-dev --no-interaction --no-progress --prefer-dist --optimize-autoloader
+
+      - name: Build micro runtime
+        id: build
+        run: |
+          set -o pipefail
+          mkdir -p logs
+          bash scripts/build-micro-sfx.sh "${PHPSFX_PLATFORM}" 2>&1 | tee "logs/build-${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}.log"
+
+      - name: Test micro PHP and Phar packaging
+        if: steps.build.outcome == 'success'
+        run: |
+          bash scripts/test-micro-packaging.sh "${PHPSFX_DIST_DIR}/micro-sfx-php${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}"
+
+      - name: Test Hyperf 3.2 micro Phar
+        if: steps.build.outcome == 'success'
+        env:
+          PHPSFX_EXPECTED_SWOOLE_VERSION: ${{ inputs.swoole_src_ref || '6.2.5' }}
+          PHPSFX_ODBC_SMOKE_DRIVER: ${{ matrix.odbc == '1' && 'SQLite3' || '' }}
+        run: |
+          bash scripts/test-hyperf-micro-phar.sh "${PHPSFX_DIST_DIR}/micro-sfx-php${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}"
+
+      - name: Upload micro experiment artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: micro-experiment-${{ matrix.php }}-${{ matrix.platform }}-${{ matrix.database }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            dist/micro-${{ matrix.php }}-${{ matrix.platform }}-${{ matrix.database }}/
+            logs/
+
+  merge:
+    name: Merge micro experiment evidence
+    if: always()
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout experiment branch
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: micro-experiment-*
+          path: evidence
+          merge-multiple: true
+
+      - name: Merge metadata and checksums
+        run: |
+          set -eux
+          find evidence -type f -maxdepth 5 -print | sort
+          mapfile -t metadata < <(find evidence -name 'build-meta-*.json' -type f -print | sort)
+          if [ "${#metadata[@]}" -gt 0 ]; then
+            python3 scripts/merge-micro-meta.py evidence evidence/build-meta.json
+            find evidence -type f -perm -111 -print0 | xargs -0 sha256sum > evidence/SHA256SUMS
+          fi
+
+      - name: Upload merged micro experiment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: micro-experiment-merged
+          retention-days: 30
+          if-no-files-found: warn
+          path: evidence/
