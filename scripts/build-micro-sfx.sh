@@ -191,7 +191,7 @@ file_put_contents($path, $source);
 $path = $argv[1];
 $source = file_get_contents($path);
 $search = "        \x27EXTRA_LIBS\x27 => \$config[\x27libs\x27],";
-$replace = "        \x27EXTRA_LIBS\x27 => getenv(\x27PHPSFX_MICRO_DYNAMIC_ODBC\x27) === \x271\x27\n            ? str_replace(\n                [BUILD_LIB_PATH . \x27/libodbc.a\x27, BUILD_LIB_PATH . \x27/libodbccr.a\x27, BUILD_LIB_PATH . \x27/libodbcinst.a\x27],\n                [\x27-lodbc\x27, \x27-lodbccr\x27, \x27-lodbcinst\x27],\n                \$config[\x27libs\x27],\n            )\n            : \$config[\x27libs\x27],";
+$replace = "        \x27EXTRA_LIBS\x27 => getenv(\x27PHPSFX_MICRO_DYNAMIC_ODBC\x27) === \x271\x27\n            ? str_replace(\n                [BUILD_LIB_PATH . \x27/libodbc.a\x27, BUILD_LIB_PATH . \x27/libodbccr.a\x27, BUILD_LIB_PATH . \x27/libodbcinst.a\x27],\n                [\x27-lodbc\x27, \x27-Wl,--no-as-needed -lodbccr\x27, \x27-lodbcinst -Wl,--as-needed\x27],\n                \$config[\x27libs\x27],\n            )\n            : \$config[\x27libs\x27],";
 if (substr_count($source, $search) !== 1) {
     throw new RuntimeException("Unexpected LinuxBuilder EXTRA_LIBS anchor");
 }
@@ -261,6 +261,7 @@ if ! ./bin/spc build "${BUILD_ARGS[@]}"; then
   for build_log in "${SPC_DIR}/log/spc.output.log" "${SPC_DIR}/log/spc.shell.log"; do
     if [[ -f "${build_log}" ]]; then
       echo "--- static-php-cli failure log: ${build_log} ---" >&2
+      grep -E -i 'error:|undefined|cannot|not found|ld\.lld|collect2|failed' "${build_log}" | tail -n 120 >&2 || true
       tail -n 240 "${build_log}" >&2 || true
     fi
   done
