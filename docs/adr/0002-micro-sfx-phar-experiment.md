@@ -26,8 +26,8 @@ micro.sfx + [0xfd 0xf6 0x69 0xe6 + big-endian INI length + INI data] + app.phar
 
 | PHP | 平台 | 变体 | 目的 |
 |------|------|------|------|
+| 8.4 / 8.5 | Linux x86_64、Linux ARM64 | `mysql`、`pgsql`、`odbc` | 生产 PDO-only；ODBC 动态 unixODBC |
 | 8.4 / 8.5 | macOS ARM64 | `mysql`、`pgsql` | 生产 PDO-only、本地 Phar |
-| 8.4 / 8.5 | Linux x86_64 | `odbc` | ODBC hook、动态 unixODBC、事务并发 |
 
 Linux ODBC 必须保留 `libodbc.so.2` 动态依赖。如果 static-php-cli 默认静态 musl 链路无法满足该合同，workflow 保留失败日志并停止扩展，不通过放宽验证来掩盖差异。
 
@@ -54,7 +54,7 @@ Linux ODBC 必须保留 `libodbc.so.2` 动态依赖。如果 static-php-cli 默�
 
 实验代码位于远程 `micro.sfx` 分支，构建入口是 `scripts/build-micro-sfx.sh`，Phar 入口是 `scripts/pack-micro-phar.sh`。分支的 `push` 事件会运行 `.github/workflows/micro-experiment.yml`；该 workflow 只保存每个代表构建的 Actions artifact 和合并证据，不创建 GitHub Release，不修改 `swoole-cli` 分支，也不复制现有 24 个生产资产。
 
-构建变体由 `PHPSFX_DB_VARIANT` 选择：`mysql` 和 `pgsql` 是独立生产 PDO-only 试验包，`odbc` 是 Linux ODBC-only 试验包；不再构建混合开发包。ODBC 包通过 `PHPSFX_SWOOLE_ODBC=1` 启用 Swoole 协程 ODBC，并要求 Linux 运行时动态依赖 `libodbc.so.2`。`PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1` 是默认值，关闭 dmskc2 不使用的 JIT 代码生成，但保留 OPcache 扩展本身。
+构建变体由 `PHPSFX_DB_VARIANT` 选择：`mysql` 和 `pgsql` 是独立生产 PDO-only 试验包，Linux 另有 `odbc` 生产包；不再构建混合开发包。ODBC 包通过 `PHPSFX_SWOOLE_ODBC=1` 启用 Swoole 协程 ODBC，并要求 Linux 运行时动态依赖 `libodbc.so.2`。`PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1` 是默认值，关闭 dmskc2 不使用的 JIT 代码生成，但保留 OPcache 扩展本身。
 
 最小运行流程如下：
 

@@ -2,7 +2,7 @@
 
 这是 `micro.sfx` 远程分支的独立实验说明。目标是用 PHP micro SAPI 承载当前 dmskc2 所需的 Swoole、PDO、Redis、Phar 和基础 PHP 能力，再把应用 Phar 追加为可直接执行的单文件程序。实验链与正式 `swoole-cli` 发行链并行，现有 Swoole CLI 分支、tag、Release 和生产部署文件保持不变。
 
-当前实验固定 PHP `8.4.27`、`8.5.12` 和 Swoole `6.2.5`，默认关闭 dmskc2 不使用的 OPcache JIT，同时保留 Swoole server、coroutine、curl hook、mysqlnd、c-ares DNS、Phar 和必要 PHP 扩展。代表构建覆盖 macOS ARM64 的 `mysql`、`pgsql` 生产包与 Linux x86_64 的 `odbc` 生产包；不再构建混合开发包，micro.sfx 不作为独立 PHP 开发环境。
+当前实验固定 PHP `8.4.27`、`8.5.12` 和 Swoole `6.2.5`，默认关闭 dmskc2 不使用的 OPcache JIT，同时保留 Swoole server、coroutine、curl hook、mysqlnd、c-ares DNS、Phar 和必要 PHP 扩展。代表构建覆盖 Linux x86_64、Linux ARM64 的 `mysql`、`pgsql`、`odbc` 生产包，以及 macOS ARM64 的 `mysql`、`pgsql` 生产包；不构建混合开发包，micro.sfx 不作为独立 PHP 开发环境。
 
 micro 的运行格式是：
 
@@ -391,7 +391,7 @@ bash scripts/pack-micro-phar.sh \
 ./build/micro-app
 ```
 
-实验分支为 `micro.sfx`，固定验证 PHP 8.4.27/8.5.12、Swoole 6.2.5 和当前 dmskc2 扩展集合；保留 Swoole server/coroutine/curl hook/mysqlnd/DNS/Phar 基础能力，默认关闭未使用的 OPcache JIT。代表矩阵覆盖 macOS ARM64 `mysql`、`pgsql` 与 Linux x86_64 `odbc`；不构建混合开发包。micro 运行时通过 `--with-micro-fake-cli` 暴露 `PHP_SAPI=cli`，不提供 `SWOOLE_CLI` 或 Swoole CLI `--self` 行为；Phar 内的可写数据必须放在外部目录。Linux ODBC 仍要求 `libodbc.so.2` 动态依赖。推送 `micro.sfx` 会运行实验 workflow；workflow 只上传 Actions artifact，不创建 Release，也不进入现有 24 个 Swoole CLI 资产。详情见 [micro.sfx + Phar ADR](docs/adr/0002-micro-sfx-phar-experiment.md)。
+实验分支为 `micro.sfx`，固定验证 PHP 8.4.27/8.5.12、Swoole 6.2.5 和当前 dmskc2 扩展集合；保留 Swoole server/coroutine/curl hook/mysqlnd/DNS/Phar 基础能力，默认关闭未使用的 OPcache JIT。代表矩阵为 Linux x86_64、Linux ARM64 的 `mysql`、`pgsql`、`odbc`，以及 macOS ARM64 的 `mysql`、`pgsql`；每条 PHP 线共八种产物，不构建混合开发包。micro 运行时通过 `--with-micro-fake-cli` 暴露 `PHP_SAPI=cli`，不提供 `SWOOLE_CLI` 或 Swoole CLI `--self` 行为；Phar 内的可写数据必须放在外部目录。Linux ODBC 仍要求 `libodbc.so.2` 动态依赖。推送 `micro.sfx` 会运行实验 workflow；workflow 只上传 Actions artifact，不创建 Release，也不进入现有 24 个 Swoole CLI 资产。详情见 [micro.sfx + Phar ADR](docs/adr/0002-micro-sfx-phar-experiment.md)。
 
 ### micro.sfx 使用方法
 
@@ -433,7 +433,7 @@ PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1 \
 bash scripts/build-micro-sfx.sh macos-a64
 ```
 
-Linux x86_64 ODBC 代表包必须使用 ODBC Profile，并要求构建机有 unixODBC 开发头文件：
+Linux x86_64、Linux ARM64 ODBC 代表包必须使用 ODBC Profile，并要求构建机有 unixODBC 开发头文件：
 
 ```bash
 PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
@@ -441,9 +441,10 @@ PHPSFX_PHP_VERSION=8.5 PHPSFX_PHP_FULL_VERSION=8.5.12 \
 PHPSFX_DB_VARIANT=odbc PHPSFX_SWOOLE_ODBC=1 \
 PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1 \
 bash scripts/build-micro-sfx.sh linux-x64
+# Linux ARM64 使用：bash scripts/build-micro-sfx.sh linux-a64
 ```
 
-构建产物位于 `dist/micro-<php>-<platform>-<variant>/`，文件名为 `micro-sfx-php<php>-<platform>-<variant>`。构建脚本会写入独立元数据和 `SHA256SUMS`，并在复制后执行版本、扩展、PDO、ODBC 动态依赖和 SQLite smoke 校验。
+构建产物位于 `dist/micro-<php>-<platform>-<variant>/`，文件名为 `micro-sfx-php<php>-<platform>-<variant>`。构建脚本会写入独立元数据和 `SHA256SUMS`，并在复制后执行版本、扩展、PDO、ODBC 动态依赖和 Phar smoke 校验。
 
 把应用 Phar 打包为可直接执行文件：
 
@@ -467,7 +468,7 @@ bash scripts/test-micro-packaging.sh "$MICRO"
 bash scripts/test-hyperf-micro-phar.sh "$MICRO"
 ```
 
-这些脚本覆盖普通 PHP、默认/GZ/BZ2 Phar、INI 注入、`micro_get_self_filename()`、`phar://` 资源、PHP/Swoole/PDO 校验和 Hyperf 3.2 smoke。ODBC 代表包还必须检查 `libodbc.so.2`；外部数据库厂商驱动、DSN、账号和密码不随 micro.sfx 提供。
+这些脚本覆盖普通 PHP、默认/GZ/BZ2 Phar、INI 注入、`micro_get_self_filename()`、`phar://` 资源、PHP/Swoole/PDO 校验和 Hyperf 3.2 smoke。Linux ODBC 代表包还必须检查 `libodbc.so.2`；外部数据库厂商驱动、DSN、账号和密码不随 micro.sfx 提供。
 
 
 ## 参考

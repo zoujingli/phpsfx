@@ -40,6 +40,42 @@ jobs:
       matrix:
         include:
           - php: '8.4'
+            platform: linux-x64
+            database: mysql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: ubuntu-latest
+          - php: '8.4'
+            platform: linux-x64
+            database: pgsql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: ubuntu-latest
+          - php: '8.4'
+            platform: linux-x64
+            database: odbc
+            profile: scripts/profiles/hyperfadmin-odbc.env
+            odbc: '1'
+            runner: ubuntu-latest
+          - php: '8.4'
+            platform: linux-a64
+            database: mysql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: ubuntu-24.04-arm
+          - php: '8.4'
+            platform: linux-a64
+            database: pgsql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: ubuntu-24.04-arm
+          - php: '8.4'
+            platform: linux-a64
+            database: odbc
+            profile: scripts/profiles/hyperfadmin-odbc.env
+            odbc: '1'
+            runner: ubuntu-24.04-arm
+          - php: '8.4'
             platform: macos-a64
             database: mysql
             profile: scripts/profiles/hyperfadmin-slim.env
@@ -52,6 +88,42 @@ jobs:
             odbc: '0'
             runner: macos-15
           - php: '8.5'
+            platform: linux-x64
+            database: mysql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: ubuntu-latest
+          - php: '8.5'
+            platform: linux-x64
+            database: pgsql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: ubuntu-latest
+          - php: '8.5'
+            platform: linux-x64
+            database: odbc
+            profile: scripts/profiles/hyperfadmin-odbc.env
+            odbc: '1'
+            runner: ubuntu-latest
+          - php: '8.5'
+            platform: linux-a64
+            database: mysql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: ubuntu-24.04-arm
+          - php: '8.5'
+            platform: linux-a64
+            database: pgsql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: ubuntu-24.04-arm
+          - php: '8.5'
+            platform: linux-a64
+            database: odbc
+            profile: scripts/profiles/hyperfadmin-odbc.env
+            odbc: '1'
+            runner: ubuntu-24.04-arm
+          - php: '8.5'
             platform: macos-a64
             database: mysql
             profile: scripts/profiles/hyperfadmin-slim.env
@@ -63,18 +135,6 @@ jobs:
             profile: scripts/profiles/hyperfadmin-slim.env
             odbc: '0'
             runner: macos-15
-          - php: '8.4'
-            platform: linux-x64
-            database: odbc
-            profile: scripts/profiles/hyperfadmin-odbc.env
-            odbc: '1'
-            runner: ubuntu-latest
-          - php: '8.5'
-            platform: linux-x64
-            database: odbc
-            profile: scripts/profiles/hyperfadmin-odbc.env
-            odbc: '1'
-            runner: ubuntu-latest
     env:
       PHPSFX_PLATFORM: ${{ matrix.platform }}
       PHPSFX_PHP_VERSION: ${{ matrix.php }}
