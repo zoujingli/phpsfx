@@ -1,18 +1,28 @@
-# 自维护 Swoole CLI
+# micro.sfx + Phar 实验链
 
-本仓库是自维护的 `swoole-cli` 发行源码和构建仓库，当前构建版本为 `v6.2.5.1`。Release 同时发布 PHP `8.4.27`、`8.5.12` 两条版本线，Swoole 均为 `6.2.5`，并保留把 PHP 入口或 Phar 追加进运行时的单文件能力。两条 PHP 版本线均包含 CVE-2026-109618、CVE-2026-109619 的安全修复；已打包的单文件应用需要使用新运行时重新打包。官方仓库只作为固定基线和实现参考；同步记录见 [docs/upstream-sync.md](docs/upstream-sync.md)。
+这是 `micro.sfx` 远程分支的独立实验说明。目标是用 PHP micro SAPI 承载当前 dmskc2 所需的 Swoole、PDO、Redis、Phar 和基础 PHP 能力，再把应用 Phar 追加为可直接执行的单文件程序。实验链与正式 `swoole-cli` 发行链并行，现有 Swoole CLI 分支、tag、Release 和生产部署文件保持不变。
 
-两条 PHP 版本线在 Linux x86_64、Linux ARM64、macOS ARM64 三个平台各提供 `mysql`、`pgsql`、`odbc` 三种线上包，以及 `sqlite-mysql-pgsql` 开发包，合计 24 个二进制。开发包在 Linux 启用 PDO ODBC 和 Swoole 协程 ODBC，在 macOS 禁用 ODBC；三个平台均保留独立 ODBC 线上包。具备 ODBC 能力的包动态依赖部署机的 unixODBC，厂商驱动、DSN、客户端依赖和凭据由部署环境提供。
+当前实验固定 PHP `8.4.27`、`8.5.12` 和 Swoole `6.2.5`，默认关闭 dmskc2 不使用的 OPcache JIT，同时保留 Swoole server、coroutine、curl hook、mysqlnd、c-ares DNS、Phar 和必要 PHP 扩展。代表构建覆盖 macOS ARM64 `sqlite-mysql-pgsql` 开发包与 Linux x86_64 `odbc` 包；`mysql` 变体用于验证生产 PDO-only 裁剪。
 
-运行时使用 Swoole CLI 官方 SFX 格式：
+micro 的运行格式是：
+
+```text
+micro.sfx + [可选 INI magic/length/data] + app.phar
+```
+
+生成文件直接执行 `./app`，不使用 Swoole CLI 的 `--self` 参数。micro 提供 `micro_get_self_filename()` 和 `phar://` 只读资源访问；应用配置、日志、上传、缓存和数据库文件放在 Phar 外部。
+
+## Swoole CLI 基线参考
+
+以下章节记录本仓库原有的 Swoole CLI 发布矩阵，仅作为 micro.sfx 的组件和兼容性基线；micro.sfx 实验不会创建这些 Release 资产。
+
+Swoole CLI 基线的格式是：
 
 ```text
 swoole-cli + payload.php|app.phar + pack('J', payloadSize)
 ```
 
-其中 `pack('J', payloadSize)` 是 Swoole CLI 官方 SFX 读取逻辑需要的 8 字节长度尾部（与官方 `pack-sfx.php` 保持一致）。
-
-运行已打包产物时需要传入 `--self`，例如 `./app --self list`。这是 Swoole CLI 官方 SFX 模式的入口开关。
+该格式需要使用 `--self` 入口，例如 `./app --self list`。这套格式只适用于下面的 Swoole CLI 基线章节，不适用于 micro.sfx。
 
 ## Release 产物
 
@@ -355,6 +365,17 @@ chmod +x build/app
 ```bash
 bash scripts/test-packaging.sh swoole-cli-php8.5-linux-x64-mysql
 ```
+
+## micro.sfx 快速使用
+
+从远程分支获取并查看完整构建、打包和验证命令：
+
+```bash
+git clone --branch micro.sfx --single-branch https://github.com/zoujingli/phpsfx.git
+cd phpsfx
+```
+
+构建后用 `scripts/pack-micro-phar.sh` 生成文件，直接执行 `./build/app`；micro 不使用 Swoole CLI 的 `--self` 参数。完整变体、环境变量、INI 注入、Phar 可写目录和验证入口见下方 [micro.sfx + Phar 实验链](#microsfx--phar-实验链) 与 [micro.sfx + Phar ADR](docs/adr/0002-micro-sfx-phar-experiment.md)。
 
 ## micro.sfx + Phar 实验链
 
