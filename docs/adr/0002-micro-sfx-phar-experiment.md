@@ -42,6 +42,8 @@ Linux ODBC 必须保留 `libodbc.so.2` 动态依赖。如果 static-php-cli 默�
 
 因此 micro.sfx 的体积收益取决于 PHP 版本和构建器输入，不能按历史 micro 产物推断统一收益；8.5 代表包当前反而更大。
 
+用同一个最小测试 Phar 追加到两种 SFX 后，结论一致：8.4.27 的 micro 文件为 34,601,168 bytes，Swoole CLI 为 36,793,256 bytes，减少 2,192,088 bytes（-5.96%）；8.5.12 的 micro 文件为 43,217,344 bytes，Swoole CLI 为 39,721,864 bytes，增加 3,495,480 bytes（+8.80%）。两种生成文件分别以直接执行和 `--self` 执行，均输出预期的 PHP 版本、`cli` SAPI、Phar 内容和对应运行时标识。
+
 ## 体积与兼容性边界
 
 micro 与 Swoole CLI 的运行时基线、SFX 格式和组件构建器不同。历史约 31 MB 的 micro 产物使用的是旧 PHP/Swoole 和旧扩展集，不能直接作为当前体积预估。实验必须使用同一测试 Phar，分别记录运行时和打包后文件大小，再与当前 Swoole CLI 代表产物比较。
