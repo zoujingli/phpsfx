@@ -240,7 +240,7 @@ insert = r'''        if (getenv('PHPSFX_MICRO_DYNAMIC_ODBC') === '1' && PHP_OS_F
                     $systemIncludeCandidates[] = substr($flag, 2);
                 }
             }
-            foreach (['odbc.h', 'sql.h', 'sqlext.h', 'sqltypes.h', 'unixodbc.h', 'odbcinst.h'] as $header) {
+            foreach (['odbc.h', 'sql.h', 'sqlext.h', 'sqltypes.h', 'sqlucode.h', 'unixodbc.h', 'odbcinst.h'] as $header) {
                 $source = '';
                 foreach ($systemIncludeCandidates as $candidate) {
                     if (is_file($candidate . '/' . $header)) {
