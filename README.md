@@ -473,6 +473,8 @@ chmod +x build/micro-app
 
 `--ini` 可以重复使用，`--ini-file path/to/app.ini` 可以注入多行配置。`app.phar` 必须包含可执行 Phar stub；生成文件的格式是 `micro.sfx + 可选 INI 块 + app.phar`，运行时直接执行 `./build/micro-app`。使用 `micro_get_self_filename()` 或 `phar://` 读取包内只读资源；日志、配置、上传、缓存、数据库文件和其他运行时写入内容放到 Phar 外部。
 
+当前按 CLI OPcache 关闭的配置验收，与 dmskc2 的打包配置一致。macOS ARM64 / PHP 8.4.27 / PostgreSQL 产物实测注入 `opcache.enable_cli=1` 后，最小 Phar 在执行时触发 SIGBUS；同一 Phar 注入 `opcache.enable_cli=0` 正常，根因尚未定位。OPcache 扩展仍保留，使用时应在注入的 INI 中保持 `opcache.enable_cli=0`；其他平台及版本开启 CLI OPcache 的行为未验收。
+
 构建后可分别运行：
 
 ```bash
