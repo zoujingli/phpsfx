@@ -159,7 +159,8 @@ patch_dynamic_odbc_builder() {
   local linux_builder="${SPC_DIR}/src/SPC/builder/linux/LinuxBuilder.php"
   local autoconf_executor="${SPC_DIR}/src/SPC/util/executor/UnixAutoconfExecutor.php"
   local zig_toolchain="${SPC_DIR}/src/SPC/toolchain/ZigToolchain.php"
-  [[ -f "${linux_builder}" && -f "${autoconf_executor}" && -f "${zig_toolchain}" ]] || {
+  local unixodbc_builder="${SPC_DIR}/src/SPC/builder/unix/library/unixodbc.php"
+  [[ -f "${linux_builder}" && -f "${autoconf_executor}" && -f "${zig_toolchain}" && -f "${unixodbc_builder}" ]] || {
     echo "Pinned static-php-cli layout does not expose the Linux ODBC patch points" >&2
     return 1
   }
