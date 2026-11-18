@@ -388,8 +388,8 @@ insert = """            SourceManager::initSource(sources: ['php-src'], source_o
                 if (is_file($config)) {
                     $contents = file_get_contents($config);
                     if (substr_count($contents, 'PHP_NEW_EXTENSION([opcache],') === 1 && substr_count($contents, 'm4_if([1], [0], [') === 0) {
-                        $contents = str_replace('PHP_NEW_EXTENSION([opcache],', 'm4_if([1], [0], [\\nPHP_NEW_EXTENSION([opcache],', $contents, 1);
-                        $contents = str_replace('PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])', 'PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])\\n])', $contents, 1);
+                        $contents = str_replace('PHP_NEW_EXTENSION([opcache],', 'm4_if([1], [0], [\\nPHP_NEW_EXTENSION([opcache],', $contents);
+                        $contents = str_replace('PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])', 'PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])\\n])', $contents);
                         file_put_contents($config, $contents);
                     }
                 }
