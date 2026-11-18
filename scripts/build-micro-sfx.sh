@@ -361,6 +361,31 @@ foreach ($anchors as $candidate) {
         break;
     }
 }
+
+disable_micro_opcache_source() {
+  local config_path="${SPC_DIR}/source/php-src/ext/opcache/config.m4"
+  [[ -f "${config_path}" ]] || {
+    echo "PHP OPcache config.m4 was not found: ${config_path}" >&2
+    return 1
+  }
+  python3 - "${config_path}" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+start = "PHP_NEW_EXTENSION([opcache],"
+end = "PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])"
+if "m4_if([1], [0], [" in source:
+    raise SystemExit(0)
+if source.count(start) != 1 or source.count(end) != 1:
+    raise SystemExit("Unexpected PHP 8.5 OPcache config layout")
+source = source.replace(start, "m4_if([1], [0], [\n" + start, 1)
+source = source.replace(end, end + "\n])", 1)
+path.write_text(source)
+PY
+  echo "Disabled PHP OPcache source for micro.sfx" >&2
+}
 if ($anchor === null) {
     throw new RuntimeException("Unexpected micro configure anchor in {$path}");
 }
@@ -429,6 +454,7 @@ if [[ "${PREFER_PREBUILT}" == 1 ]]; then
 fi
 ./bin/spc download "${DOWNLOAD_ARGS[@]}"
 patch_native_pdo_dependencies
+disable_micro_opcache_source
 BUILD_ARGS=("${MICRO_EXTENSIONS}" --build-micro --with-micro-fake-cli)
 if ! ./bin/spc build "${BUILD_ARGS[@]}"; then
   for build_log in "${SPC_DIR}/log/spc.output.log" "${SPC_DIR}/log/spc.shell.log" "${SPC_DIR}/log/php-src.config.log"; do
