@@ -101,6 +101,12 @@ micro.sfx 面向 dmskc2 生产运行，不使用 OPcache。static-php-cli 的 PH
 
 PHP 8.5 Linux x64 MySQL 代表包为 `35,972,872` bytes，日志中 `errors` 为空；PHP 8.4 macOS ARM64 PostgreSQL 为 `32,370,144` bytes，两个代表的普通 PHP、默认/GZ/BZ2 Phar、INI、Hyperf 3.2 smoke 均通过。新的 metadata 将 `opcache` 固定记录为 `false`，禁止扩展校验确认运行时未加载 OPcache。
 
+## micro-v6.2.5.2 恢复 OPcache
+
+`dmskc2/composer.json` 明确声明 `ext-opcache`，生产打包配置通过 `opcache.enable=0` 和 `opcache.enable_cli=0` 关闭运行时缓存。`micro-v6.2.5.1` 将 OPcache 从构建和校验中移除，导致 micro 产物与 dmskc2 的平台合同不一致。`micro-v6.2.5.2` 恢复 OPcache 扩展，所有 micro 变体继续默认传入 `--disable-opcache-jit`，避免启用 JIT 代码生成。
+
+构建 metadata 记录 `opcache: true` 和 `opcache_jit: false`，`opcache` 从禁止扩展集合移除并加入必需扩展校验。Swoole、PDO、ODBC 动态依赖、micro.sfx + Phar 格式和 16 个代表产物矩阵均保持不变；`micro-v6.2.5.1` 的移除记录保留为历史证据。
+
 ## 当前本地适配
 
 1. `scripts/build-swoole-cli.sh` 按 `PHPSFX_PHP_VERSION` 将基线的 `sapi/PHP-VERSION.conf` 切换为 `8.4.27` 或 `8.5.12`，调用基线的 `sync-source-code.php`，并确认 `main/php_version.h` 报告精确版本。同一版本线的 patch 更新也必须同步，不能只比较 `8.4` / `8.5` 前缀。

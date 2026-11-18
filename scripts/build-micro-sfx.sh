@@ -42,6 +42,7 @@ PREFER_PREBUILT=${PHPSFX_MICRO_PREFER_PREBUILT:-0}
 MICRO_DYNAMIC_ODBC=${PHPSFX_MICRO_DYNAMIC_ODBC:-1}
 MICRO_SPC_TARGET=${PHPSFX_MICRO_SPC_TARGET:-}
 TRIM_NATIVE_PDO_EXTENSIONS=${PHPSFX_MICRO_TRIM_NATIVE_PDO_EXTENSIONS:-1}
+DISABLE_OPCACHE_JIT=${PHPSFX_MICRO_DISABLE_OPCACHE_JIT:-1}
 MICRO_EXTENSIONS=${PHPSFX_MICRO_EXTENSIONS:-${PHPSFX_EXTENSIONS:-}}
 EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,phar,zlib}
 FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-}
@@ -71,6 +72,7 @@ Important environment variables:
   PHPSFX_MICRO_SKIP_DOCTOR      Set to 1 when the host build tools are preinstalled
   PHPSFX_MICRO_PREFER_PREBUILT  Set to 1 to use static-php-cli hosted packages
   PHPSFX_MICRO_TRIM_NATIVE_PDO_EXTENSIONS  Keep PDO drivers without pgsql/sqlite3 extensions
+  PHPSFX_MICRO_DISABLE_OPCACHE_JIT         Disable unused OPcache JIT code generation (default: 1)
   PHPSFX_DIST_DIR                Output directory
 USAGE
 }
@@ -108,28 +110,12 @@ append_extension() {
   esac
 }
 
-remove_extension() {
-  local value=$1
-  local name=$2
-  local item
-  local result=
-  local items=()
-  IFS=',' read -r -a items <<< "${value}"
-  for item in "${items[@]}"; do
-    [[ -z "${item}" || "${item}" == "${name}" ]] && continue
-    result="${result:+${result},}${item}"
-  done
-  printf '%s' "${result}"
-}
-
-# micro.sfx is a production runtime for dmskc2; OPcache is unused there and
-# is intentionally excluded from both the build and the runtime contract.
-export PHPSFX_MICRO_DISABLE_OPCACHE=1
-MICRO_EXTENSIONS=$(remove_extension "${MICRO_EXTENSIONS}" opcache)
-EXPECTED_EXTENSIONS=$(remove_extension "${EXPECTED_EXTENSIONS}" opcache)
-if [[ ",${FORBIDDEN_EXTENSIONS}," != *,opcache,* ]]; then
-  FORBIDDEN_EXTENSIONS="${FORBIDDEN_EXTENSIONS:+${FORBIDDEN_EXTENSIONS},}opcache"
-fi
+# Only the MySQL production variant carries mysqlnd and the Swoole MySQL hook;
+# the pgsql/odbc variants keep a strict single-PDO contract.
+case "${DISABLE_OPCACHE_JIT}" in
+  0|1) ;;
+  *) echo "PHPSFX_MICRO_DISABLE_OPCACHE_JIT must be 0 or 1" >&2; exit 2 ;;
+esac
 
 if [[ "${DB_VARIANT}" == mysql ]]; then
   append_extension swoole-hook-mysql
@@ -187,7 +173,6 @@ $replace = "            (\$enableMicro ? (getenv(\x27PHPSFX_MICRO_DYNAMIC_ODBC\x
 if (substr_count($source, $search) !== 1) {
     throw new RuntimeException("Unexpected LinuxBuilder micro configure anchor");
 }
-
 $source = str_replace($search, $replace, $source);
 file_put_contents($path, $source);
 ' "${linux_builder}"
@@ -340,80 +325,6 @@ PY
   echo "Configured dynamic Linux unixODBC for micro ODBC" >&2
 }
 
-patch_micro_opcache_builder() {
-  local builder_path
-  local builder_base_path="${SPC_DIR}/src/SPC/builder/BuilderBase.php"
-  [[ -f "${builder_base_path}" ]] || {
-    echo "Pinned static-php-cli layout does not expose BuilderBase.php" >&2
-    return 1
-  }
-  for builder_path in "${SPC_DIR}/src/SPC/builder/linux/LinuxBuilder.php" "${SPC_DIR}/src/SPC/builder/macos/MacOSBuilder.php"; do
-    [[ -f "${builder_path}" ]] || {
-      echo "Pinned static-php-cli layout does not expose the micro builder: ${builder_path}" >&2
-      return 1
-    }
-    php -r '
-$path = $argv[1];
-$source = file_get_contents($path);
-$anchors = [
-    "            (\$enableMicro ? \x27--enable-micro=all-static \x27 : \x27--disable-micro \x27) .",
-    "                (\$enableMicro ? \x27--enable-micro \x27 : \x27--disable-micro \x27) .",
-];
-$anchor = null;
-foreach ($anchors as $candidate) {
-    if (substr_count($source, $candidate) === 1) {
-        $anchor = $candidate;
-        break;
-    }
-}
-
-if ($anchor === null) {
-    throw new RuntimeException("Unexpected micro configure anchor in {$path}");
-}
-$indent = str_repeat(" ", strlen($anchor) - strlen(ltrim($anchor)));
-$replace = $anchor . "\n" . $indent . "(getenv(\x27PHPSFX_MICRO_DISABLE_OPCACHE\x27) === \x271\x27 && \$enableMicro ? \x27--disable-opcache \x27 : \x27\x27) .";
-file_put_contents($path, str_replace($anchor, $replace, $source));
-' "${builder_path}"
-  done
-  python3 - "${builder_base_path}" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-source = path.read_text()
-search = "            SourceManager::initSource(sources: ['php-src'], source_only: true);"
-insert = """            SourceManager::initSource(sources: ['php-src'], source_only: true);
-            if (getenv('PHPSFX_MICRO_DISABLE_OPCACHE') === '1') {
-                $config = SOURCE_PATH . '/php-src/ext/opcache/config.m4';
-                if (is_file($config)) {
-                    $contents = file_get_contents($config);
-                    if (substr_count($contents, 'PHP_NEW_EXTENSION([opcache],') === 1 && substr_count($contents, 'PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])') === 1) {
-                        $lines = explode("\\n", $contents);
-                        $inside = false;
-                        foreach ($lines as &$line) {
-                            if (str_starts_with(trim($line), 'PHP_NEW_EXTENSION([opcache],')) {
-                                $inside = true;
-                            }
-                            if ($inside) {
-                                $line = 'dnl ' . $line;
-                                if (str_contains($line, 'PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])')) {
-                                    $inside = false;
-                                }
-                            }
-                        }
-                        unset($line);
-                        $contents = implode("\\n", $lines);
-                        file_put_contents($config, $contents);
-                    }
-                }
-            }"""
-if source.count(search) != 1:
-    raise SystemExit('Unexpected BuilderBase source extraction anchor')
-path.write_text(source.replace(search, insert, 1))
-PY
-  echo "Configured micro.sfx without OPcache" >&2
-}
-
 for command in git php composer tar; do
   require_command "${command}"
 done
@@ -432,8 +343,6 @@ fi
 git -C "${SPC_DIR}" fetch --force --depth=1 origin "${SPC_REF}"
 git -C "${SPC_DIR}" checkout --force FETCH_HEAD
 SPC_COMMIT=$(git -C "${SPC_DIR}" rev-parse HEAD)
-
-patch_micro_opcache_builder
 
 if [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${MICRO_DYNAMIC_ODBC}" == 1 ]]; then
   if [[ -z "${MICRO_SPC_TARGET}" ]]; then
@@ -472,6 +381,9 @@ fi
 ./bin/spc download "${DOWNLOAD_ARGS[@]}"
 patch_native_pdo_dependencies
 BUILD_ARGS=("${MICRO_EXTENSIONS}" --build-micro --with-micro-fake-cli)
+if [[ "${DISABLE_OPCACHE_JIT}" == 1 ]]; then
+  BUILD_ARGS+=(--disable-opcache-jit)
+fi
 if ! ./bin/spc build "${BUILD_ARGS[@]}"; then
   for build_log in "${SPC_DIR}/log/spc.output.log" "${SPC_DIR}/log/spc.shell.log" "${SPC_DIR}/log/php-src.config.log"; do
     if [[ -f "${build_log}" ]]; then
@@ -525,6 +437,11 @@ if [[ "${SWOOLE_ODBC_ENABLED}" == 1 ]]; then
 else
   SWOOLE_ODBC_JSON=false
 fi
+if [[ "${DISABLE_OPCACHE_JIT}" == 1 ]]; then
+  OPCACHE_JIT_JSON=false
+else
+  OPCACHE_JIT_JSON=true
+fi
 if [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${MICRO_DYNAMIC_ODBC}" == 1 ]]; then
   MICRO_DYNAMIC_ODBC_JSON=true
 else
@@ -555,7 +472,8 @@ cat > "${DIST_DIR}/build-meta-${PHP_VERSION}-${PLATFORM}-${DB_VARIANT}.json" <<M
   "forbidden_extensions": "${FORBIDDEN_EXTENSIONS}",
   "required_pdo_drivers": "${REQUIRED_PDO_DRIVERS}",
   "swoole_odbc": ${SWOOLE_ODBC_JSON},
-  "opcache": false,
+  "opcache": true,
+  "opcache_jit": ${OPCACHE_JIT_JSON},
   "odbc_dynamic_dependency": "${ODBC_DYNAMIC_DEPENDENCY}",
   "sfx_size": ${SFX_SIZE},
   "sha256": "${SHA256}",

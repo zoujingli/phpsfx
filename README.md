@@ -2,7 +2,7 @@
 
 这是 `micro.sfx` 远程分支的独立实验说明。目标是用 PHP micro SAPI 承载当前 dmskc2 所需的 Swoole、PDO、Redis、Phar 和基础 PHP 能力，再把应用 Phar 追加为可直接执行的单文件程序。实验链与正式 `swoole-cli` 发行链并行，现有 Swoole CLI 分支、tag、Release 和生产部署文件保持不变。
 
-当前实验固定 PHP `8.4.27`、`8.5.12` 和 Swoole `6.2.5`，移除 dmskc2 不使用的 OPcache，同时保留 Swoole server、coroutine、curl hook、mysqlnd、c-ares DNS、Phar 和必要 PHP 扩展。代表构建覆盖 Linux x86_64、Linux ARM64 的 `mysql`、`pgsql`、`odbc` 生产包，以及 macOS ARM64 的 `mysql`、`pgsql` 生产包；不构建混合开发包，micro.sfx 不作为独立 PHP 开发环境。
+当前实验固定 PHP `8.4.27`、`8.5.12` 和 Swoole `6.2.5`，默认关闭 dmskc2 不使用的 OPcache JIT，同时保留 Swoole server、coroutine、curl hook、mysqlnd、c-ares DNS、Phar 和必要 PHP 扩展。代表构建覆盖 Linux x86_64、Linux ARM64 的 `mysql`、`pgsql`、`odbc` 生产包，以及 macOS ARM64 的 `mysql`、`pgsql` 生产包；不构建混合开发包，micro.sfx 不作为独立 PHP 开发环境。
 
 micro 的运行格式是：
 
@@ -67,7 +67,7 @@ exif,gettext,gmp,imagick,intl,mongodb,mysqli,pgsql,readline,session,soap,
 sqlite3,xlswriter,xsl,yaml
 ```
 
-说明：Swoole CLI 的 `+xml` 构建项会同时启用 `dom/simplexml/xmlreader/xmlwriter`；`json/hash/pcre/reflection/PDO/libxml` 等属于 PHP core 或依赖扩展带出的基础能力，不作为独立 `prepare.php +xxx` 参数传入。`intl` 默认不打包，`bz2/gd` 作为标准能力保留；micro.sfx 另外移除 OPcache。数据库只提供所选组合的 PDO 驱动；不含 SQLite 的组合不构建 SQLite 客户端库或 `pdo_sqlite`，含 SQLite 的组合也不加载 `SQLite3`。不含 PostgreSQL 的组合不构建 libpq。Swoole 的 mysqlnd 能力不随 PDO MySQL 的选择改变。
+说明：Swoole CLI 的 `+xml` 构建项会同时启用 `dom/simplexml/xmlreader/xmlwriter`；`json/hash/pcre/reflection/PDO/libxml` 等属于 PHP core 或依赖扩展带出的基础能力，不作为独立 `prepare.php +xxx` 参数传入。`intl` 默认不打包，`bz2/gd/opcache` 作为标准能力保留。数据库只提供所选组合的 PDO 驱动；不含 SQLite 的组合不构建 SQLite 客户端库或 `pdo_sqlite`，含 SQLite 的组合也不加载 `SQLite3`。不含 PostgreSQL 的组合不构建 libpq。Swoole 的 mysqlnd 能力不随 PDO MySQL 的选择改变。
 
 构建脚本还会把 Swoole CLI 上游默认的 full profile 收敛为 `PHPSFX_SWOOLE_CLI_ENABLED_EXTENSIONS`，并进一步裁剪底层依赖：
 
@@ -243,7 +243,7 @@ bash scripts/test-dameng-odbc.sh \
 - `PHP_SAPI === "cli"`。
 - `SWOOLE_CLI` 常量存在。
 - 数字版本的 `PHPSFX_SWOOLE_SRC_REF` 与运行时 `SWOOLE_VERSION` 完全一致。
-- `swoole`、`redis`、所选组合的 PDO 扩展，以及 `openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter`、`bz2`、`gd` 等必需扩展已加载；micro.sfx 还必须确认 `opcache` 未加载。
+- `swoole`、`redis`、所选组合的 PDO 扩展，以及 `openssl`、`curl`、`mbstring`、`phar`、`zlib`、`zip`、`dom`、`simplexml`、`xmlreader`、`xmlwriter`、`bz2`、`gd`、`opcache` 等必需扩展已加载。
 - `PDO::getAvailableDrivers()` 恰好等于所选驱动集合，未选 PDO 扩展未加载；含 SQLite 的组合执行本地 PDO SQLite 读写，无 SQLite 的组合检查该驱动缺席；`SQLite3` 类始终不存在。
 - ODBC 产物额外校验 PDO ODBC 驱动、Swoole ODBC 协程 hook 和平台对应的动态 unixODBC 依赖。
 - `mysqli`、原生 `pgsql`、`sqlite3` 和 `exif/gettext/gmp/imagick/intl/mongodb/readline/session/soap/xlswriter/xsl/yaml` 等未使用扩展未被打包。
@@ -267,7 +267,7 @@ PHPSFX_EXPECTED_PHP_VERSION=8.5.12 \
 PHPSFX_EXPECTED_SWOOLE_VERSION=6.2.5 \
 PHPSFX_EXPECT_SWOOLE_ODBC=1 \
 PHPSFX_REQUIRED_PDO_DRIVERS=sqlite,mysql,pgsql,odbc \
-PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,bz2,gd \
+PHPSFX_REQUIRED_EXTENSIONS=swoole,redis,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,curl,mbstring,phar,zlib,zip,dom,simplexml,xmlreader,xmlwriter,bz2,gd,opcache \
 PHPSFX_FORBIDDEN_EXTENSIONS=exif,gettext,gmp,imagick,intl,mongodb,mysqli,pgsql,readline,session,soap,sqlite3,xlswriter,xsl,yaml \
   bash scripts/validate-swoole-cli.sh dist/swoole-cli-php8.5-linux-x64-sqlite-mysql-pgsql
 ```
@@ -391,7 +391,7 @@ bash scripts/pack-micro-phar.sh \
 ./build/micro-app
 ```
 
-实验分支为 `micro.sfx`，固定验证 PHP 8.4.27/8.5.12、Swoole 6.2.5 和当前 dmskc2 扩展集合；保留 Swoole server/coroutine/curl hook/DNS/Phar 基础能力；仅 mysql 变体启用 mysqlnd hook，micro 构建移除 OPcache。代表矩阵为 Linux x86_64、Linux ARM64 的 `mysql`、`pgsql`、`odbc`，以及 macOS ARM64 的 `mysql`、`pgsql`；每条 PHP 线共八种产物，不构建混合开发包。micro 运行时通过 `--with-micro-fake-cli` 暴露 `PHP_SAPI=cli`，不提供 `SWOOLE_CLI` 或 Swoole CLI `--self` 行为；Phar 内的可写数据必须放在外部目录。Linux ODBC 代表包在静态 PHP/Swoole 基础上使用 glibc 2.17 目标，并把构建机的 unixODBC `libodbc.so.2` 映射为运行时动态依赖。推送 `micro.sfx` 会运行实验 workflow；workflow 只上传 Actions artifact，不创建 Release，也不进入现有 24 个 Swoole CLI 资产。详情见 [micro.sfx + Phar ADR](docs/adr/0002-micro-sfx-phar-experiment.md)。
+实验分支为 `micro.sfx`，固定验证 PHP 8.4.27/8.5.12、Swoole 6.2.5 和当前 dmskc2 扩展集合；保留 Swoole server/coroutine/curl hook/DNS/Phar 基础能力；仅 mysql 变体启用 mysqlnd hook，默认关闭未使用的 OPcache JIT。代表矩阵为 Linux x86_64、Linux ARM64 的 `mysql`、`pgsql`、`odbc`，以及 macOS ARM64 的 `mysql`、`pgsql`；每条 PHP 线共八种产物，不构建混合开发包。micro 运行时通过 `--with-micro-fake-cli` 暴露 `PHP_SAPI=cli`，不提供 `SWOOLE_CLI` 或 Swoole CLI `--self` 行为；Phar 内的可写数据必须放在外部目录。Linux ODBC 代表包在静态 PHP/Swoole 基础上使用 glibc 2.17 目标，并把构建机的 unixODBC `libodbc.so.2` 映射为运行时动态依赖。推送 `micro.sfx` 会运行实验 workflow；workflow 只上传 Actions artifact，不创建 Release，也不进入现有 24 个 Swoole CLI 资产。详情见 [micro.sfx + Phar ADR](docs/adr/0002-micro-sfx-phar-experiment.md)。
 
 ### micro.sfx 使用方法
 
@@ -408,6 +408,7 @@ cd phpsfx
 PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-slim.env \
 PHPSFX_PHP_VERSION=8.5 PHPSFX_PHP_FULL_VERSION=8.5.12 \
 PHPSFX_DB_VARIANT=mysql \
+PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1 \
 bash scripts/build-micro-sfx.sh macos-a64
 ```
 
@@ -417,6 +418,7 @@ bash scripts/build-micro-sfx.sh macos-a64
 PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-slim.env \
 PHPSFX_PHP_VERSION=8.5 PHPSFX_PHP_FULL_VERSION=8.5.12 \
 PHPSFX_DB_VARIANT=pgsql \
+PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1 \
 bash scripts/build-micro-sfx.sh macos-a64
 ```
 
@@ -427,6 +429,7 @@ PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-slim.env \
 PHPSFX_PHP_VERSION=8.5 PHPSFX_PHP_FULL_VERSION=8.5.12 \
 PHPSFX_DB_VARIANT=mysql \
 PHPSFX_REQUIRED_PDO_DRIVERS=mysql \
+PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1 \
 bash scripts/build-micro-sfx.sh macos-a64
 ```
 
@@ -436,6 +439,7 @@ Linux x86_64、Linux ARM64 ODBC 代表包必须使用 ODBC Profile，并要求�
 PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-odbc.env \
 PHPSFX_PHP_VERSION=8.5 PHPSFX_PHP_FULL_VERSION=8.5.12 \
 PHPSFX_DB_VARIANT=odbc PHPSFX_SWOOLE_ODBC=1 \
+PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1 \
 bash scripts/build-micro-sfx.sh linux-x64
 # Linux ARM64 使用：bash scripts/build-micro-sfx.sh linux-a64
 ```
@@ -461,14 +465,15 @@ macos.a64.pgsql.sfx
 MICRO=dist/micro-8.5-macos-a64-mysql/macos.a64.mysql.sfx
 bash scripts/pack-micro-phar.sh \
   "$MICRO" app.phar build/micro-app \
-  --ini memory_limit=512M
+  --ini memory_limit=512M \
+  --ini opcache.enable_cli=0
 chmod +x build/micro-app
 ./build/micro-app
 ```
 
 `--ini` 可以重复使用，`--ini-file path/to/app.ini` 可以注入多行配置。`app.phar` 必须包含可执行 Phar stub；生成文件的格式是 `micro.sfx + 可选 INI 块 + app.phar`，运行时直接执行 `./build/micro-app`。使用 `micro_get_self_filename()` 或 `phar://` 读取包内只读资源；日志、配置、上传、缓存、数据库文件和其他运行时写入内容放到 Phar 外部。
 
-micro.sfx 不包含 OPcache；这与 dmskc2 的运行需求一致，也避免 CLI OPcache 在 Phar 场景中的无效开销。历史实验曾在 macOS ARM64 / PHP 8.4.27 / PostgreSQL 产物注入 `opcache.enable_cli=1` 后触发 SIGBUS，但新产物已移除该扩展，因此不再提供或验收该配置。
+当前按 CLI OPcache 关闭的配置验收，与 dmskc2 的打包配置一致。macOS ARM64 / PHP 8.4.27 / PostgreSQL 产物实测注入 `opcache.enable_cli=1` 后，最小 Phar 在执行时触发 SIGBUS；同一 Phar 注入 `opcache.enable_cli=0` 正常，根因尚未定位。OPcache 扩展仍保留，使用时应在注入的 INI 中保持 `opcache.enable_cli=0`；其他平台及版本开启 CLI OPcache 的行为未验收。
 
 构建后可分别运行：
 
