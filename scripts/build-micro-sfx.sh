@@ -387,9 +387,22 @@ insert = """            SourceManager::initSource(sources: ['php-src'], source_o
                 $config = SOURCE_PATH . '/php-src/ext/opcache/config.m4';
                 if (is_file($config)) {
                     $contents = file_get_contents($config);
-                    if (substr_count($contents, 'PHP_NEW_EXTENSION([opcache],') === 1 && substr_count($contents, 'm4_if([1], [0], [') === 0) {
-                        $contents = str_replace('PHP_NEW_EXTENSION([opcache],', 'm4_if([1], [0], [\\nPHP_NEW_EXTENSION([opcache],', $contents);
-                        $contents = str_replace('PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])', 'PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])\\n])', $contents);
+                    if (substr_count($contents, 'PHP_NEW_EXTENSION([opcache],') === 1 && substr_count($contents, 'PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])') === 1) {
+                        $lines = explode("\\n", $contents);
+                        $inside = false;
+                        foreach ($lines as &$line) {
+                            if (str_starts_with(trim($line), 'PHP_NEW_EXTENSION([opcache],')) {
+                                $inside = true;
+                            }
+                            if ($inside) {
+                                $line = 'dnl ' . $line;
+                                if (str_contains($line, 'PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])')) {
+                                    $inside = false;
+                                }
+                            }
+                        }
+                        unset($line);
+                        $contents = implode("\\n", $lines);
                         file_put_contents($config, $contents);
                     }
                 }
