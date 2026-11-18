@@ -342,6 +342,11 @@ PY
 
 patch_micro_opcache_builder() {
   local builder_path
+  local builder_base_path="${SPC_DIR}/src/SPC/builder/BuilderBase.php"
+  [[ -f "${builder_base_path}" ]] || {
+    echo "Pinned static-php-cli layout does not expose BuilderBase.php" >&2
+    return 1
+  }
   for builder_path in "${SPC_DIR}/src/SPC/builder/linux/LinuxBuilder.php" "${SPC_DIR}/src/SPC/builder/macos/MacOSBuilder.php"; do
     [[ -f "${builder_path}" ]] || {
       echo "Pinned static-php-cli layout does not expose the micro builder: ${builder_path}" >&2
@@ -370,32 +375,30 @@ $replace = $anchor . "\n" . $indent . "(getenv(\x27PHPSFX_MICRO_DISABLE_OPCACHE\
 file_put_contents($path, str_replace($anchor, $replace, $source));
 ' "${builder_path}"
   done
-  echo "Configured micro.sfx without OPcache" >&2
-}
-
-disable_micro_opcache_source() {
-  local config_path="${SPC_DIR}/source/php-src/ext/opcache/config.m4"
-  [[ -f "${config_path}" ]] || {
-    echo "PHP OPcache config.m4 was not found: ${config_path}" >&2
-    return 1
-  }
-  python3 - "${config_path}" <<'PY'
+  python3 - "${builder_base_path}" <<'PY'
 from pathlib import Path
 import sys
 
 path = Path(sys.argv[1])
 source = path.read_text()
-start = "PHP_NEW_EXTENSION([opcache],"
-end = "PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])"
-if "m4_if([1], [0], [" in source:
-    raise SystemExit(0)
-if source.count(start) != 1 or source.count(end) != 1:
-    raise SystemExit("Unexpected PHP 8.5 OPcache config layout")
-source = source.replace(start, "m4_if([1], [0], [\n" + start, 1)
-source = source.replace(end, end + "\n])", 1)
-path.write_text(source)
+search = "            SourceManager::initSource(sources: ['php-src'], source_only: true);"
+insert = """            SourceManager::initSource(sources: ['php-src'], source_only: true);
+            if (getenv('PHPSFX_MICRO_DISABLE_OPCACHE') === '1') {
+                $config = SOURCE_PATH . '/php-src/ext/opcache/config.m4';
+                if (is_file($config)) {
+                    $contents = file_get_contents($config);
+                    if (substr_count($contents, 'PHP_NEW_EXTENSION([opcache],') === 1 && substr_count($contents, 'm4_if([1], [0], [') === 0) {
+                        $contents = str_replace('PHP_NEW_EXTENSION([opcache],', 'm4_if([1], [0], [\\nPHP_NEW_EXTENSION([opcache],', $contents, 1);
+                        $contents = str_replace('PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])', 'PHP_INSTALL_HEADERS([ext/opcache], [zend_accelerator_api.h])\\n])', $contents, 1);
+                        file_put_contents($config, $contents);
+                    }
+                }
+            }"""
+if source.count(search) != 1:
+    raise SystemExit('Unexpected BuilderBase source extraction anchor')
+path.write_text(source.replace(search, insert, 1))
 PY
-  echo "Disabled PHP OPcache source for micro.sfx" >&2
+  echo "Configured micro.sfx without OPcache" >&2
 }
 
 for command in git php composer tar; do
@@ -455,7 +458,6 @@ if [[ "${PREFER_PREBUILT}" == 1 ]]; then
 fi
 ./bin/spc download "${DOWNLOAD_ARGS[@]}"
 patch_native_pdo_dependencies
-disable_micro_opcache_source
 BUILD_ARGS=("${MICRO_EXTENSIONS}" --build-micro --with-micro-fake-cli)
 if ! ./bin/spc build "${BUILD_ARGS[@]}"; then
   for build_log in "${SPC_DIR}/log/spc.output.log" "${SPC_DIR}/log/spc.shell.log" "${SPC_DIR}/log/php-src.config.log"; do
