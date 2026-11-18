@@ -124,6 +124,7 @@ remove_extension() {
 
 # micro.sfx is a production runtime for dmskc2; OPcache is unused there and
 # is intentionally excluded from both the build and the runtime contract.
+export PHPSFX_MICRO_DISABLE_OPCACHE=1
 MICRO_EXTENSIONS=$(remove_extension "${MICRO_EXTENSIONS}" opcache)
 EXPECTED_EXTENSIONS=$(remove_extension "${EXPECTED_EXTENSIONS}" opcache)
 if [[ ",${FORBIDDEN_EXTENSIONS}," != *,opcache,* ]]; then
@@ -186,6 +187,7 @@ $replace = "            (\$enableMicro ? (getenv(\x27PHPSFX_MICRO_DYNAMIC_ODBC\x
 if (substr_count($source, $search) !== 1) {
     throw new RuntimeException("Unexpected LinuxBuilder micro configure anchor");
 }
+
 $source = str_replace($search, $replace, $source);
 file_put_contents($path, $source);
 ' "${linux_builder}"
@@ -338,6 +340,38 @@ PY
   echo "Configured dynamic Linux unixODBC for micro ODBC" >&2
 }
 
+patch_micro_opcache_builder() {
+  local builder_path
+  for builder_path in "${SPC_DIR}/src/SPC/builder/linux/LinuxBuilder.php" "${SPC_DIR}/src/SPC/builder/macos/MacOSBuilder.php"; do
+    [[ -f "${builder_path}" ]] || {
+      echo "Pinned static-php-cli layout does not expose the micro builder: ${builder_path}" >&2
+      return 1
+    }
+    php -r '
+$path = $argv[1];
+$source = file_get_contents($path);
+$anchors = [
+    "            (\$enableMicro ? \x27--enable-micro=all-static \x27 : \x27--disable-micro \x27) .",
+    "                (\$enableMicro ? \x27--enable-micro \x27 : \x27--disable-micro \x27) .",
+];
+$anchor = null;
+foreach ($anchors as $candidate) {
+    if (substr_count($source, $candidate) === 1) {
+        $anchor = $candidate;
+        break;
+    }
+}
+if ($anchor === null) {
+    throw new RuntimeException("Unexpected micro configure anchor in {$path}");
+}
+$indent = str_repeat(" ", strlen($anchor) - strlen(ltrim($anchor)));
+$replace = $anchor . "\n" . $indent . "(getenv(\x27PHPSFX_MICRO_DISABLE_OPCACHE\x27) === \x271\x27 && \$enableMicro ? \x27--disable-opcache \x27 : \x27\x27) .";
+file_put_contents($path, str_replace($anchor, $replace, $source));
+' "${builder_path}"
+  done
+  echo "Configured micro.sfx without OPcache" >&2
+}
+
 for command in git php composer tar; do
   require_command "${command}"
 done
@@ -356,6 +390,8 @@ fi
 git -C "${SPC_DIR}" fetch --force --depth=1 origin "${SPC_REF}"
 git -C "${SPC_DIR}" checkout --force FETCH_HEAD
 SPC_COMMIT=$(git -C "${SPC_DIR}" rev-parse HEAD)
+
+patch_micro_opcache_builder
 
 if [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${MICRO_DYNAMIC_ODBC}" == 1 ]]; then
   if [[ -z "${MICRO_SPC_TARGET}" ]]; then
