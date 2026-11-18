@@ -362,6 +362,17 @@ foreach ($anchors as $candidate) {
     }
 }
 
+if ($anchor === null) {
+    throw new RuntimeException("Unexpected micro configure anchor in {$path}");
+}
+$indent = str_repeat(" ", strlen($anchor) - strlen(ltrim($anchor)));
+$replace = $anchor . "\n" . $indent . "(getenv(\x27PHPSFX_MICRO_DISABLE_OPCACHE\x27) === \x271\x27 && \$enableMicro ? \x27--disable-opcache \x27 : \x27\x27) .";
+file_put_contents($path, str_replace($anchor, $replace, $source));
+' "${builder_path}"
+  done
+  echo "Configured micro.sfx without OPcache" >&2
+}
+
 disable_micro_opcache_source() {
   local config_path="${SPC_DIR}/source/php-src/ext/opcache/config.m4"
   [[ -f "${config_path}" ]] || {
@@ -385,16 +396,6 @@ source = source.replace(end, end + "\n])", 1)
 path.write_text(source)
 PY
   echo "Disabled PHP OPcache source for micro.sfx" >&2
-}
-if ($anchor === null) {
-    throw new RuntimeException("Unexpected micro configure anchor in {$path}");
-}
-$indent = str_repeat(" ", strlen($anchor) - strlen(ltrim($anchor)));
-$replace = $anchor . "\n" . $indent . "(getenv(\x27PHPSFX_MICRO_DISABLE_OPCACHE\x27) === \x271\x27 && \$enableMicro ? \x27--disable-opcache \x27 : \x27\x27) .";
-file_put_contents($path, str_replace($anchor, $replace, $source));
-' "${builder_path}"
-  done
-  echo "Configured micro.sfx without OPcache" >&2
 }
 
 for command in git php composer tar; do
