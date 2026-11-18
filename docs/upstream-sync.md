@@ -93,6 +93,14 @@ v6.2.5.0 的 dmskc2 代表运行时仍包含调试符号。对同一份可执行
 
 v6.2.5.1 CI 运行 `43008772159` 的 25 个 job 全部成功，24 个二进制总大小由 v6.2.5.0 的 1,103,076,376 bytes 降至 1,016,801,832 bytes，减少 86,274,544 bytes（7.82%）。合并 artifact 为 50 个文件，归档 SHA-256 为 `5003777229c179a824829c67b94041930e10468e6fccd03835e496033b5e44c1`；分页 Release API 核对 26 个资产的名称、大小和 SHA-256 全部一致，6 个代表下载链接通过 HTTP 206 探针。
 
+## micro.sfx 移除 OPcache
+
+micro.sfx 面向 dmskc2 生产运行，不使用 OPcache。static-php-cli 的 PHP 8.5 默认仍会编译 OPcache，即使扩展列表没有它，因此 micro 构建在锁定的 Linux/macOS builder 和 PHP 源码提取后的 `ext/opcache/config.m4` 阶段同时禁用并裁剪该扩展；正式 `swoole-cli` 发行链保持原有 OPcache 合同。
+
+提交 `566ef77` 的 CI 运行 `44217971033` 的 17 个 job 全部成功，16 个 micro 二进制的构建、版本、PDO 集合、禁止扩展、Phar 打包和 Hyperf 3.2 smoke 均通过。合并 artifact 为 50 个文件，归档 SHA-256 为 `5db8866e3467719b3e868324c20d2122e1bc83ab13b6cb17fa1f7e52d44119a5`。PHP 8.4/8.5 各 8 个产物的二进制总大小为 `564,404,248` bytes；与此前相同实验分支的 `642,507,704` bytes 代表集合相比减少 `78,103,456` bytes（12.16%），其中 Linux ODBC 变体受益最明显。该运行只上传 Actions artifact，不创建 Release。
+
+PHP 8.5 Linux x64 MySQL 代表包为 `35,972,872` bytes，日志中 `errors` 为空；PHP 8.4 macOS ARM64 PostgreSQL 为 `32,370,144` bytes，两个代表的普通 PHP、默认/GZ/BZ2 Phar、INI、Hyperf 3.2 smoke 均通过。新的 metadata 将 `opcache` 固定记录为 `false`，禁止扩展校验确认运行时未加载 OPcache。
+
 ## 当前本地适配
 
 1. `scripts/build-swoole-cli.sh` 按 `PHPSFX_PHP_VERSION` 将基线的 `sapi/PHP-VERSION.conf` 切换为 `8.4.27` 或 `8.5.12`，调用基线的 `sync-source-code.php`，并确认 `main/php_version.h` 报告精确版本。同一版本线的 patch 更新也必须同步，不能只比较 `8.4` / `8.5` 前缀。
