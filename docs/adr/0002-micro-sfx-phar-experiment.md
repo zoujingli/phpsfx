@@ -46,22 +46,21 @@ Linux ODBC 必须保留 `libodbc.so.2` 动态依赖。micro 的 PHP、Swoole 和
 
 ## PHP 能力裁剪记录
 
-当前 dmskc2 的 `composer.json` 明确要求 bcmath、bz2、curl、DOM、fileinfo、GD、mbstring、OpenSSL、OPcache、pcntl、PDO/MySQL、posix、Redis、SimpleXML、sockets、sodium、tokenizer、XML、XMLReader、XMLWriter、Zip 和 zlib；源码还实际使用 ctype、filter、iconv、Phar、Sodium、ZipArchive、GD、pcntl 与 posix。这些能力继续保留。phpdbg、PHP debug build、Xdebug、原生 pgsql、SQLite3、mysqli、session、soap、readline、intl、imagick、gmp 和 mongodb 已经排除。
+当前 dmskc2 的 `composer.json` 明确要求 bcmath、bz2、curl、DOM、fileinfo、GD、mbstring、OpenSSL、OPcache、pcntl、PDO/MySQL、posix、Redis、SimpleXML、sockets、sodium、tokenizer、XML、XMLReader、XMLWriter、Zip 和 zlib；源码还实际使用 ctype、filter、iconv、Phar、Sodium、ZipArchive、GD、pcntl 与 posix。正式 Swoole CLI 发行链继续按既有合同保留这些能力；micro.sfx 只保留实际运行所需能力并移除 OPcache。phpdbg、PHP debug build、Xdebug、原生 pgsql、SQLite3、mysqli、session、soap、readline、intl、imagick、gmp 和 mongodb 已经排除。
 
-生产 dmskc2 只声明 `pdo_mysql`；`pdo_mysql` 与 `pdo_pgsql` 分别构建为独立生产变体，不再构建 `sqlite-mysql-pgsql` 混合开发包；micro.sfx 不作为独立 PHP 开发环境。当前 static-php-cli 默认编译 OPcache JIT，但 dmskc2 的 SFX 打包配置把 CLI OPcache 关闭，因此实验链从本次起默认传入 `--disable-opcache-jit`。JIT 关闭后的实际字节差异必须以同一版本重建和 Phar smoke 结果为准。
+生产 dmskc2 只声明 `pdo_mysql`；`pdo_mysql` 与 `pdo_pgsql` 分别构建为独立生产变体，不再构建 `sqlite-mysql-pgsql` 混合开发包；micro.sfx 不作为独立 PHP 开发环境。OPcache 及其 JIT 均从 micro.sfx 中移除，避免为未使用的 CLI 缓存能力编译和链接代码。
 
 ## 分支、构建和运行入口
 
 实验代码位于远程 `micro.sfx` 分支，构建入口是 `scripts/build-micro-sfx.sh`，Phar 入口是 `scripts/pack-micro-phar.sh`。分支的 `push` 事件会运行 `.github/workflows/micro-experiment.yml`；该 workflow 只保存每个代表构建的 Actions artifact 和合并证据，不创建 GitHub Release，不修改 `swoole-cli` 分支，也不复制现有 24 个生产资产。
 
-构建变体由 `PHPSFX_DB_VARIANT` 选择：`mysql` 和 `pgsql` 是独立生产 PDO-only 试验包，Linux 另有 `odbc` 生产包；不再构建混合开发包。ODBC 包通过 `PHPSFX_SWOOLE_ODBC=1` 启用 Swoole 协程 ODBC，并要求 Linux 运行时动态依赖 `libodbc.so.2`。`PHPSFX_MICRO_DYNAMIC_ODBC=1` 默认只对 Linux ODBC 生效，使用 `x86_64-linux-gnu.2.17` 或 `aarch64-linux-gnu.2.17` 目标；`PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1` 是默认值，关闭 dmskc2 不使用的 JIT 代码生成，但保留 OPcache 扩展本身。
+构建变体由 `PHPSFX_DB_VARIANT` 选择：`mysql` 和 `pgsql` 是独立生产 PDO-only 试验包，Linux 另有 `odbc` 生产包；不再构建混合开发包。ODBC 包通过 `PHPSFX_SWOOLE_ODBC=1` 启用 Swoole 协程 ODBC，并要求 Linux 运行时动态依赖 `libodbc.so.2`。`PHPSFX_MICRO_DYNAMIC_ODBC=1` 默认只对 Linux ODBC 生效，使用 `x86_64-linux-gnu.2.17` 或 `aarch64-linux-gnu.2.17` 目标；OPcache 不在任何 micro 变体中。
 
 最小运行流程如下：
 
 ```bash
 PHPSFX_PROFILE_FILE=scripts/profiles/hyperfadmin-slim.env \
 PHPSFX_PHP_VERSION=8.5 PHPSFX_DB_VARIANT=mysql \
-PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1 \
 bash scripts/build-micro-sfx.sh macos-a64
 bash scripts/pack-micro-phar.sh \
   dist/micro-8.5-macos-a64-mysql/macos.a64.mysql.sfx \
