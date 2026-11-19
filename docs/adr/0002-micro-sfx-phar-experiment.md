@@ -27,7 +27,7 @@ micro.sfx + [0xfd 0xf6 0x69 0xe6 + big-endian INI length + INI data] + app.phar
 | PHP | 平台 | 变体 | 目的 |
 |------|------|------|------|
 | 8.4 / 8.5 | Linux x86_64、Linux ARM64 | `mysql`、`pgsql`、`odbc` | 生产 PDO-only；ODBC 动态 unixODBC |
-| 8.4 / 8.5 | macOS ARM64 | `mysql`、`pgsql` | 生产 PDO-only、本地 Phar |
+| 8.4 / 8.5 | macOS ARM64、macOS x86_64 | `mysql`、`pgsql` | 生产 PDO-only、本地 Phar |
 
 Linux ODBC 必须保留 `libodbc.so.2` 动态依赖。micro 的 PHP、Swoole 和业务扩展仍保持静态编译；ODBC 代表构建切换 static-php-cli 到 glibc 2.17 目标，并将构建机已安装的 unixODBC Driver Manager 以共享 soname 映射到 buildroot，从而满足 Linux 运行时合同。若该链路失败，workflow 保留失败日志并停止扩展，不通过放宽验证来掩盖差异。
 

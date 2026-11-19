@@ -391,7 +391,7 @@ bash scripts/pack-micro-phar.sh \
 ./build/micro-app
 ```
 
-实验分支为 `micro.sfx`，固定验证 PHP 8.4.27/8.5.12、Swoole 6.2.5 和当前 dmskc2 扩展集合；保留 Swoole server/coroutine/curl hook/DNS/Phar 基础能力；仅 mysql 变体启用 mysqlnd hook，默认关闭未使用的 OPcache JIT。代表矩阵为 Linux x86_64、Linux ARM64 的 `mysql`、`pgsql`、`odbc`，以及 macOS ARM64 的 `mysql`、`pgsql`；每条 PHP 线共八种产物，不构建混合开发包。micro 运行时通过 `--with-micro-fake-cli` 暴露 `PHP_SAPI=cli`，不提供 `SWOOLE_CLI` 或 Swoole CLI `--self` 行为；Phar 内的可写数据必须放在外部目录。Linux ODBC 代表包在静态 PHP/Swoole 基础上使用 glibc 2.17 目标，并把构建机的 unixODBC `libodbc.so.2` 映射为运行时动态依赖。推送 `micro.sfx` 会运行实验 workflow；workflow 只上传 Actions artifact，不创建 Release，也不进入现有 24 个 Swoole CLI 资产。详情见 [micro.sfx + Phar ADR](docs/adr/0002-micro-sfx-phar-experiment.md)。
+实验分支为 `micro.sfx`，固定验证 PHP 8.4.27/8.5.12、Swoole 6.2.5 和当前 dmskc2 扩展集合；保留 Swoole server/coroutine/curl hook/DNS/Phar 基础能力；仅 mysql 变体启用 mysqlnd hook，默认关闭未使用的 OPcache JIT。代表矩阵为 Linux x86_64、Linux ARM64 的 `mysql`、`pgsql`、`odbc`，以及 macOS ARM64、macOS x86_64 的 `mysql`、`pgsql`；每条 PHP 线共十种产物，不构建混合开发包。micro 运行时通过 `--with-micro-fake-cli` 暴露 `PHP_SAPI=cli`，不提供 `SWOOLE_CLI` 或 Swoole CLI `--self` 行为；Phar 内的可写数据必须放在外部目录。Linux ODBC 代表包在静态 PHP/Swoole 基础上使用 glibc 2.17 目标，并把构建机的 unixODBC `libodbc.so.2` 映射为运行时动态依赖。推送 `micro.sfx` 会运行实验 workflow；workflow 只上传 Actions artifact，不创建 Release，也不进入现有 24 个 Swoole CLI 资产。详情见 [micro.sfx + Phar ADR](docs/adr/0002-micro-sfx-phar-experiment.md)。
 
 ### micro.sfx 使用方法
 
@@ -444,7 +444,7 @@ bash scripts/build-micro-sfx.sh linux-x64
 # Linux ARM64 使用：bash scripts/build-micro-sfx.sh linux-a64
 ```
 
-构建产物位于 `dist/micro-<php>-<platform>-<variant>/`。PHP 8.4 和 8.5 各自使用独立目录，每条线固定以下八个文件名：
+构建产物位于 `dist/micro-<php>-<platform>-<variant>/`。PHP 8.4 和 8.5 各自使用独立目录，每条线固定以下十个文件名：
 
 ```text
 linux.x64.mysql.sfx
@@ -453,11 +453,13 @@ linux.x64.odbc.sfx
 linux.a64.mysql.sfx
 linux.a64.pgsql.sfx
 linux.a64.odbc.sfx
+macos.x64.mysql.sfx
+macos.x64.pgsql.sfx
 macos.a64.mysql.sfx
 macos.a64.pgsql.sfx
 ```
 
-构建脚本写入独立元数据和 `SHA256SUMS`，并执行版本、扩展、单 PDO 集合和 ODBC 动态依赖校验；workflow 继续验证 Phar 打包与 Hyperf。合并 artifact 保留 PHP 版本目录，汇总元数据的 `asset_path` 和根目录 `SHA256SUMS` 使用相对路径，避免两条 PHP 线同名覆盖。汇总必须验证全部 16 个唯一构建及实际文件的大小、SHA-256；任何缺项均失败。从 Actions 下载后，先为所选 `.sfx` 执行 `chmod +x` 再打包。
+构建脚本写入独立元数据和 `SHA256SUMS`，并执行版本、扩展、单 PDO 集合和 ODBC 动态依赖校验；workflow 继续验证 Phar 打包与 Hyperf。合并 artifact 保留 PHP 版本目录，汇总元数据的 `asset_path` 和根目录 `SHA256SUMS` 使用相对路径，避免两条 PHP 线同名覆盖。汇总必须验证全部 20 个唯一构建及实际文件的大小、SHA-256；任何缺项均失败。从 Actions 下载后，先为所选 `.sfx` 执行 `chmod +x` 再打包。
 
 把应用 Phar 打包为可直接执行文件：
 

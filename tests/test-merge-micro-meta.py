@@ -16,8 +16,8 @@ class MicroMetadataTests(unittest.TestCase):
     def make_artifacts(self, root):
         files = []
         for php in ("8.4", "8.5"):
-            for platform in ("linux-x64", "linux-a64", "macos-a64"):
-                databases = ("mysql", "pgsql") if platform == "macos-a64" else ("mysql", "pgsql", "odbc")
+            for platform in ("linux-x64", "linux-a64", "macos-x64", "macos-a64"):
+                databases = ("mysql", "pgsql") if platform in ("macos-x64", "macos-a64") else ("mysql", "pgsql", "odbc")
                 for database in databases:
                     directory = root / "dist" / f"micro-{php}-{platform}-{database}"
                     directory.mkdir(parents=True)
@@ -47,11 +47,11 @@ class MicroMetadataTests(unittest.TestCase):
             result = self.merge(root)
             self.assertEqual(result.returncode, 0, result.stderr)
             summary = json.loads((root / "build-meta.json").read_text())
-            self.assertEqual(summary["build_count"], 16)
+            self.assertEqual(summary["build_count"], 20)
             self.assertEqual(summary["php_versions"], ["8.4", "8.5"])
-            self.assertEqual(len({item["asset"] for item in summary["builds"]}), 8)
+            self.assertEqual(len({item["asset"] for item in summary["builds"]}), 10)
             checksums = dict(line.split("  ", 1)[::-1] for line in (root / "SHA256SUMS").read_text().splitlines())
-            self.assertEqual(len(checksums), 16)
+            self.assertEqual(len(checksums), 20)
             for item in summary["builds"]:
                 binary = root / item["asset_path"]
                 self.assertEqual(checksums[item["asset_path"]], hashlib.sha256(binary.read_bytes()).hexdigest())

@@ -107,6 +107,12 @@ PHP 8.5 Linux x64 MySQL 代表包为 `35,972,872` bytes，日志中 `errors` 为
 
 构建 metadata 记录 `opcache: true` 和 `opcache_jit: false`，`opcache` 从禁止扩展集合移除并加入必需扩展校验。Swoole、PDO、ODBC 动态依赖、micro.sfx + Phar 格式和 16 个代表产物矩阵均保持不变；`micro-v6.2.5.1` 的移除记录保留为历史证据。
 
+## micro.sfx 扩展 macOS Intel 平台
+
+在保留 Linux x86_64、Linux ARM64 和 macOS ARM64 的前提下，实验 workflow 增加 macOS x86_64（`macos-x64`）的 `mysql`、`pgsql` 两种生产变体。PHP 8.4.27 与 8.5.12 各增加两个代表构建，单条 PHP 线由 8 个产物扩展为 10 个，汇总矩阵由 16 个扩展为 20 个。macOS x86_64 不新增 ODBC 变体，ODBC 动态依赖合同仍只覆盖 Linux ODBC 产物。
+
+本次只扩展构建平台映射、Actions runner、元数据矩阵和文档，未修改已发布的 `micro-v6.2.5.2`、正式 `swoole-cli` 分支或生产部署文件。新增平台的完整构建、Phar、Hyperf 3.2 和 SHA-256 结果以新 workflow 运行记录为准。
+
 ## 当前本地适配
 
 1. `scripts/build-swoole-cli.sh` 按 `PHPSFX_PHP_VERSION` 将基线的 `sapi/PHP-VERSION.conf` 切换为 `8.4.27` 或 `8.5.12`，调用基线的 `sync-source-code.php`，并确认 `main/php_version.h` 报告精确版本。同一版本线的 patch 更新也必须同步，不能只比较 `8.4` / `8.5` 前缀。

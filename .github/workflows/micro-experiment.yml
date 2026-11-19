@@ -76,6 +76,18 @@ jobs:
             odbc: '1'
             runner: ubuntu-24.04-arm
           - php: '8.4'
+            platform: macos-x64
+            database: mysql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: macos-15-intel
+          - php: '8.4'
+            platform: macos-x64
+            database: pgsql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: macos-15-intel
+          - php: '8.4'
             platform: macos-a64
             database: mysql
             profile: scripts/profiles/hyperfadmin-slim.env
@@ -123,6 +135,18 @@ jobs:
             profile: scripts/profiles/hyperfadmin-odbc.env
             odbc: '1'
             runner: ubuntu-24.04-arm
+          - php: '8.5'
+            platform: macos-x64
+            database: mysql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: macos-15-intel
+          - php: '8.5'
+            platform: macos-x64
+            database: pgsql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: macos-15-intel
           - php: '8.5'
             platform: macos-a64
             database: mysql
@@ -206,6 +230,7 @@ jobs:
           case "${PHPSFX_PLATFORM}" in
             linux-x64) asset_platform=linux.x64 ;;
             linux-a64) asset_platform=linux.a64 ;;
+            macos-x64) asset_platform=macos.x64 ;;
             macos-a64) asset_platform=macos.a64 ;;
             *) echo "Unsupported platform: ${PHPSFX_PLATFORM}" >&2; exit 2 ;;
           esac
@@ -220,6 +245,7 @@ jobs:
           case "${PHPSFX_PLATFORM}" in
             linux-x64) asset_platform=linux.x64 ;;
             linux-a64) asset_platform=linux.a64 ;;
+            macos-x64) asset_platform=macos.x64 ;;
             macos-a64) asset_platform=macos.a64 ;;
             *) echo "Unsupported platform: ${PHPSFX_PLATFORM}" >&2; exit 2 ;;
           esac

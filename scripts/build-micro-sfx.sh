@@ -20,9 +20,9 @@ case "${PHP_VERSION}" in
 esac
 
 case "${PLATFORM}" in
-  linux-x64|linux-a64|macos-a64) ;;
+  linux-x64|linux-a64|macos-x64|macos-a64) ;;
   *)
-    echo "This experiment currently supports linux-x64, linux-a64 and macos-a64: ${PLATFORM}" >&2
+    echo "This experiment currently supports linux-x64, linux-a64, macos-x64 and macos-a64: ${PLATFORM}" >&2
     exit 2
     ;;
 esac
@@ -57,7 +57,7 @@ usage() {
 Usage: scripts/build-micro-sfx.sh [platform]
 
 Platforms:
-  linux-x64, linux-a64, macos-a64
+  linux-x64, linux-a64, macos-x64, macos-a64
 
 Important environment variables:
   PHPSFX_PHP_VERSION             PHP version line, 8.4 or 8.5
@@ -401,6 +401,7 @@ MICRO_SFX="${SPC_DIR}/buildroot/bin/micro.sfx"
 case "${PLATFORM}" in
   linux-x64) ASSET_PLATFORM=linux.x64 ;;
   linux-a64) ASSET_PLATFORM=linux.a64 ;;
+  macos-x64) ASSET_PLATFORM=macos.x64 ;;
   macos-a64) ASSET_PLATFORM=macos.a64 ;;
   *) echo "Unsupported asset platform: ${PLATFORM}" >&2; exit 2 ;;
 esac
