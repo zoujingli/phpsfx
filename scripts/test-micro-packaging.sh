@@ -13,6 +13,12 @@ MICRO_SFX=$1
 
 TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/phpsfx-micro-packaging.XXXXXX")
 trap 'rm -rf "${TMP_DIR}"' EXIT
+PLATFORM=${PHPSFX_PLATFORM:-}
+if [[ "${PLATFORM}" == windows-* ]]; then
+  EXECUTABLE_SUFFIX=.exe
+else
+  EXECUTABLE_SUFFIX=
+fi
 
 cat > "${TMP_DIR}/plain.php" <<'PHP'
 <?php
@@ -52,9 +58,9 @@ if ($compression === 'gz') {
 $phar->stopBuffering();
 PHP
 
-cat "${MICRO_SFX}" "${TMP_DIR}/plain.php" > "${TMP_DIR}/plain"
-chmod +x "${TMP_DIR}/plain"
-plain_output=$("${TMP_DIR}/plain")
+cat "${MICRO_SFX}" "${TMP_DIR}/plain.php" > "${TMP_DIR}/plain${EXECUTABLE_SUFFIX}"
+chmod +x "${TMP_DIR}/plain${EXECUTABLE_SUFFIX}"
+plain_output=$("${TMP_DIR}/plain${EXECUTABLE_SUFFIX}")
 echo "${plain_output}"
 case "${plain_output}" in
   plain:*:cli:micro) ;;
@@ -62,15 +68,16 @@ case "${plain_output}" in
 esac
 
 php -d phar.readonly=0 "${TMP_DIR}/make-ini-phar.php" "${TMP_DIR}/ini.phar"
-bash "${ROOT_DIR}/scripts/pack-micro-phar.sh" "${MICRO_SFX}" "${TMP_DIR}/ini.phar" "${TMP_DIR}/ini-app" --ini memory_limit=512M
-ini_output=$("${TMP_DIR}/ini-app")
+ini_output_path="${TMP_DIR}/ini-app${EXECUTABLE_SUFFIX}"
+bash "${ROOT_DIR}/scripts/pack-micro-phar.sh" "${MICRO_SFX}" "${TMP_DIR}/ini.phar" "${ini_output_path}" --ini memory_limit=512M
+ini_output=$("${ini_output_path}")
 echo "${ini_output}"
 [[ "${ini_output}" == 'ini:512M' ]] || { echo "INI injection failed: ${ini_output}" >&2; exit 1; }
 
 IFS=',' read -r -a compressions <<< "${PHPSFX_MICRO_TEST_COMPRESSIONS:-none,gz,bz2}"
 for compression in "${compressions[@]}"; do
   phar_path="${TMP_DIR}/app-${compression}.phar"
-  output_path="${TMP_DIR}/app-${compression}"
+  output_path="${TMP_DIR}/app-${compression}${EXECUTABLE_SUFFIX}"
   php -d phar.readonly=0 "${TMP_DIR}/make-phar.php" "${phar_path}" "${compression}"
   bash "${ROOT_DIR}/scripts/pack-micro-phar.sh" "${MICRO_SFX}" "${phar_path}" "${output_path}"
   phar_output=$("${output_path}")

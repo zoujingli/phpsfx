@@ -30,6 +30,7 @@ def main() -> int:
         "linux-a64": ("mysql", "pgsql", "odbc"),
         "macos-x64": ("mysql", "pgsql"),
         "macos-a64": ("mysql", "pgsql"),
+        "windows-x64": ("mysql", "pgsql"),
     }
     expected = {(php, f"{platform}-{database}")
                 for php in ("8.4", "8.5") for platform, databases in packages.items()
@@ -86,7 +87,7 @@ def main() -> int:
     }
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     output.with_name("SHA256SUMS").write_text("".join(checksums), encoding="utf-8")
-    print(f"Verified {len(builds)} micro binaries, 10 per PHP line; wrote metadata and SHA256SUMS")
+    print(f"Verified {len(builds)} micro binaries, 12 per PHP line; wrote metadata and SHA256SUMS")
     return 0
 
 

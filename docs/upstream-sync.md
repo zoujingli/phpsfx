@@ -113,6 +113,12 @@ PHP 8.5 Linux x64 MySQL 代表包为 `35,972,872` bytes，日志中 `errors` 为
 
 本次只扩展构建平台映射、Actions runner、元数据矩阵和文档，未修改已发布的 `micro-v6.2.5.2`、正式 `swoole-cli` 分支或生产部署文件。新增平台的完整构建、Phar、Hyperf 3.2 和 SHA-256 结果以新 workflow 运行记录为准。
 
+## micro.sfx 扩展 Windows x64 平台
+
+在 macOS x86_64 扩展之后，实验 workflow 增加 Windows x86_64（`windows-x64`）的 `mysql`、`pgsql` 两种生产变体。PHP 8.4.27 与 8.5.12 各增加两个构建，单条 PHP 线由 10 个产物扩展为 12 个，汇总矩阵由 20 个扩展为 24 个。Windows 使用 static-php-cli 的 MSVC WindowsBuilder，产物保持 `windows.x64.<variant>.sfx` 命名并记录为 PE 可执行文件，拼接 Phar 时输出 `.exe`。
+
+Windows 不加入 Linux ODBC 的 `libodbc.so.2` 动态依赖合同，也不构建 ODBC 变体。验证脚本在 Windows runner 上将 micro 探针和 Phar smoke 输出为 `.exe` 后执行，继续覆盖 PHP/Swoole、PDO、Phar 资源、INI 注入和 Hyperf 3.2 健康检查。完整结果以新 workflow 运行记录为准，当前 `micro-v6.2.5.2` 和正式 `swoole-cli` 发布不变。
+
 ## 当前本地适配
 
 1. `scripts/build-swoole-cli.sh` 按 `PHPSFX_PHP_VERSION` 将基线的 `sapi/PHP-VERSION.conf` 切换为 `8.4.27` 或 `8.5.12`，调用基线的 `sync-source-code.php`，并确认 `main/php_version.h` 报告精确版本。同一版本线的 patch 更新也必须同步，不能只比较 `8.4` / `8.5` 前缀。

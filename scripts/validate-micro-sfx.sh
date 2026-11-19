@@ -17,7 +17,12 @@ TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/phpsfx-micro-validate.XXXXXX")
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
 PROBE="${TMP_DIR}/probe.php"
-PROBE_APP="${TMP_DIR}/probe"
+PLATFORM=${PHPSFX_PLATFORM:-}
+if [[ "${PLATFORM}" == windows-* ]]; then
+  PROBE_APP="${TMP_DIR}/probe.exe"
+else
+  PROBE_APP="${TMP_DIR}/probe"
+fi
 cat > "${PROBE}" <<'PHP'
 <?php
 

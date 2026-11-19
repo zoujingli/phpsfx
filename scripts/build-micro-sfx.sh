@@ -20,9 +20,9 @@ case "${PHP_VERSION}" in
 esac
 
 case "${PLATFORM}" in
-  linux-x64|linux-a64|macos-x64|macos-a64) ;;
+  linux-x64|linux-a64|macos-x64|macos-a64|windows-x64) ;;
   *)
-    echo "This experiment currently supports linux-x64, linux-a64, macos-x64 and macos-a64: ${PLATFORM}" >&2
+    echo "This experiment currently supports linux-x64, linux-a64, macos-x64, macos-a64 and windows-x64: ${PLATFORM}" >&2
     exit 2
     ;;
 esac
@@ -48,7 +48,13 @@ EXPECTED_EXTENSIONS=${PHPSFX_REQUIRED_EXTENSIONS:-swoole,redis,phar,zlib}
 FORBIDDEN_EXTENSIONS=${PHPSFX_FORBIDDEN_EXTENSIONS:-}
 REQUIRED_PDO_DRIVERS=${PHPSFX_REQUIRED_PDO_DRIVERS:-}
 case "${DB_VARIANT}" in
-  mysql|pgsql|odbc) ;;
+  mysql|pgsql) ;;
+  odbc)
+    if [[ "${PLATFORM}" != linux-* ]]; then
+      echo "The micro ODBC variant is supported on Linux only: ${PLATFORM}" >&2
+      exit 2
+    fi
+    ;;
   *) echo "Unsupported micro production variant: ${DB_VARIANT}; choose mysql, pgsql or odbc" >&2; exit 2 ;;
 esac
 
@@ -57,7 +63,7 @@ usage() {
 Usage: scripts/build-micro-sfx.sh [platform]
 
 Platforms:
-  linux-x64, linux-a64, macos-x64, macos-a64
+  linux-x64, linux-a64, macos-x64, macos-a64, windows-x64
 
 Important environment variables:
   PHPSFX_PHP_VERSION             PHP version line, 8.4 or 8.5
@@ -330,7 +336,7 @@ for command in git php composer tar; do
 done
 if [[ "${PLATFORM}" == linux-* ]]; then
   require_command readelf
-else
+elif [[ "${PLATFORM}" == macos-* ]]; then
   require_command otool
 fi
 
@@ -403,6 +409,7 @@ case "${PLATFORM}" in
   linux-a64) ASSET_PLATFORM=linux.a64 ;;
   macos-x64) ASSET_PLATFORM=macos.x64 ;;
   macos-a64) ASSET_PLATFORM=macos.a64 ;;
+  windows-x64) ASSET_PLATFORM=windows.x64 ;;
   *) echo "Unsupported asset platform: ${PLATFORM}" >&2; exit 2 ;;
 esac
 ASSET_NAME="${ASSET_PLATFORM}.${DB_VARIANT}.sfx"
@@ -412,6 +419,7 @@ chmod +x "${ASSET_PATH}"
 case "${PLATFORM}" in
   linux-*) strip --strip-debug "${ASSET_PATH}" ;;
   macos-*) strip -S "${ASSET_PATH}" ;;
+  windows-*) ;;
 esac
 
 PHPSFX_PLATFORM="${PLATFORM}" \
@@ -425,11 +433,15 @@ PHPSFX_EXPECT_SWOOLE_ODBC="${SWOOLE_ODBC_ENABLED}" \
   bash "${ROOT_DIR}/scripts/validate-micro-sfx.sh" "${ASSET_PATH}"
 
 ODBC_DYNAMIC_DEPENDENCY=
-if [[ "${PLATFORM}" == linux-* ]]; then
-  ODBC_DYNAMIC_DEPENDENCY=$(readelf -d "${ASSET_PATH}" | sed -n 's/.*Shared library: \[\(libodbc\.so[^]]*\)\].*/\1/p' | head -1)
-else
-  ODBC_DYNAMIC_DEPENDENCY=$(otool -L "${ASSET_PATH}" | awk '/libodbc(\.[0-9]+)*\.dylib/ { dependency = $1; sub(/^.*\//, "", dependency); print dependency; exit }')
-fi
+case "${PLATFORM}" in
+  linux-*)
+    ODBC_DYNAMIC_DEPENDENCY=$(readelf -d "${ASSET_PATH}" | sed -n 's/.*Shared library: \[\(libodbc\.so[^]]*\)\].*/\1/p' | head -1)
+    ;;
+  macos-*)
+    ODBC_DYNAMIC_DEPENDENCY=$(otool -L "${ASSET_PATH}" | awk '/libodbc(\.[0-9]+)*\.dylib/ { dependency = $1; sub(/^.*\//, "", dependency); print dependency; exit }')
+    ;;
+  windows-*) ;;
+esac
 
 SHA256=$(sha256_file "${ASSET_PATH}")
 SFX_SIZE=$(file_size "${ASSET_PATH}")

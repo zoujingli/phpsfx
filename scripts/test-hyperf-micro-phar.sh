@@ -26,7 +26,11 @@ LOG_FILE="${TMP_DIR}/server.log"
 RESPONSE_FILE="${TMP_DIR}/response.json"
 BASE_PATH="${TMP_DIR}/app"
 PHAR_PATH="${TMP_DIR}/hyperf.phar"
-APP_PATH="${TMP_DIR}/hyperf"
+if [[ "${PHPSFX_PLATFORM:-}" == windows-* ]]; then
+  APP_PATH="${TMP_DIR}/hyperf.exe"
+else
+  APP_PATH="${TMP_DIR}/hyperf"
+fi
 SERVER_PID=
 ODBC_DB_FILE=
 

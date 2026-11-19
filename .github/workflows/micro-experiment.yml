@@ -99,6 +99,18 @@ jobs:
             profile: scripts/profiles/hyperfadmin-slim.env
             odbc: '0'
             runner: macos-15
+          - php: '8.4'
+            platform: windows-x64
+            database: mysql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: windows-latest
+          - php: '8.4'
+            platform: windows-x64
+            database: pgsql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: windows-latest
           - php: '8.5'
             platform: linux-x64
             database: mysql
@@ -159,6 +171,18 @@ jobs:
             profile: scripts/profiles/hyperfadmin-slim.env
             odbc: '0'
             runner: macos-15
+          - php: '8.5'
+            platform: windows-x64
+            database: mysql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: windows-latest
+          - php: '8.5'
+            platform: windows-x64
+            database: pgsql
+            profile: scripts/profiles/hyperfadmin-slim.env
+            odbc: '0'
+            runner: windows-latest
     env:
       PHPSFX_PLATFORM: ${{ matrix.platform }}
       PHPSFX_PHP_VERSION: ${{ matrix.php }}
@@ -202,6 +226,15 @@ jobs:
           set -eux
           HOMEBREW_NO_AUTO_UPDATE=1 brew install autoconf automake bison cmake coreutils flex gettext libtool meson nasm ninja pkg-config re2c xz yasm || true
 
+      - name: Normalize Windows build paths
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -eu
+          workspace_native=$(pwd -W 2>/dev/null || cygpath -w "$(pwd)")
+          echo "PHPSFX_MICRO_SPC_DIR=${workspace_native}/.build/static-php-cli-micro-${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}" >> "$GITHUB_ENV"
+          echo "PHPSFX_DIST_DIR=${workspace_native}/dist/micro-${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}" >> "$GITHUB_ENV"
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -212,6 +245,7 @@ jobs:
           ini-values: memory_limit=-1, phar.readonly=0
 
       - name: Install Hyperf smoke dependencies
+        shell: bash
         run: |
           set -eux
           composer validate --working-dir=tests/hyperf-smoke --strict
@@ -219,6 +253,7 @@ jobs:
 
       - name: Build micro runtime
         id: build
+        shell: bash
         run: |
           set -o pipefail
           mkdir -p logs
@@ -226,18 +261,21 @@ jobs:
 
       - name: Test micro PHP and Phar packaging
         if: steps.build.outcome == 'success'
+        shell: bash
         run: |
           case "${PHPSFX_PLATFORM}" in
             linux-x64) asset_platform=linux.x64 ;;
             linux-a64) asset_platform=linux.a64 ;;
             macos-x64) asset_platform=macos.x64 ;;
             macos-a64) asset_platform=macos.a64 ;;
+            windows-x64) asset_platform=windows.x64 ;;
             *) echo "Unsupported platform: ${PHPSFX_PLATFORM}" >&2; exit 2 ;;
           esac
           bash scripts/test-micro-packaging.sh "${PHPSFX_DIST_DIR}/${asset_platform}.${PHPSFX_DB_VARIANT}.sfx"
 
       - name: Test Hyperf 3.2 micro Phar
         if: steps.build.outcome == 'success'
+        shell: bash
         env:
           PHPSFX_EXPECTED_SWOOLE_VERSION: ${{ inputs.swoole_src_ref || '6.2.5' }}
           PHPSFX_ODBC_SMOKE_DRIVER: ${{ matrix.odbc == '1' && 'SQLite3' || '' }}
@@ -247,6 +285,7 @@ jobs:
             linux-a64) asset_platform=linux.a64 ;;
             macos-x64) asset_platform=macos.x64 ;;
             macos-a64) asset_platform=macos.a64 ;;
+            windows-x64) asset_platform=windows.x64 ;;
             *) echo "Unsupported platform: ${PHPSFX_PLATFORM}" >&2; exit 2 ;;
           esac
           bash scripts/test-hyperf-micro-phar.sh "${PHPSFX_DIST_DIR}/${asset_platform}.${PHPSFX_DB_VARIANT}.sfx"
