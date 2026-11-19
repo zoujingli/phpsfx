@@ -197,9 +197,22 @@ replacement = needle + (
 )
 if source.count(needle) != 1:
     raise SystemExit("Unexpected static-php-cli extractArchive anchor")
-path.write_text(source.replace(needle, replacement, 1), encoding="utf-8")
+source = source.replace(needle, replacement, 1)
+command = (
+    """                'xz', 'txz', 'gz', 'tgz', 'bz2' => """
+    """cmd()->execWithResult("\\"{$_7z}\\" x -so {$filename} | tar -f - -x -C \\"{$target}\\" --strip-components 1"),"""
+)
+replacement_command = (
+    """                'xz', 'txz', 'gz', 'tgz', 'bz2' => """
+    """cmd()->execWithResult("\\"{$_7z}\\" x -so {$filename} | \\"" . """
+    """(getenv('PHPSFX_WINDOWS_TAR') ?: 'tar') . """
+    """ "\\" -f - -x -C \\"{$target}\\" --strip-components 1"),"""
+)
+if source.count(command) != 1:
+    raise SystemExit("Unexpected static-php-cli Windows tar command")
+path.write_text(source.replace(command, replacement_command, 1), encoding="utf-8")
 PY
-  echo 'Normalized static-php-cli Windows archive paths' >&2
+  echo 'Normalized static-php-cli Windows archive paths and tar command' >&2
 }
 
 patch_dynamic_odbc_builder() {

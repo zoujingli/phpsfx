@@ -236,6 +236,7 @@ jobs:
             echo "PHPSFX_MICRO_SPC_DIR=${workspace_native}/.build/static-php-cli-micro-${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}"
             echo "PHPSFX_DIST_DIR=${workspace_native}/dist/micro-${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}"
             echo "PHPSFX_MICRO_SKIP_DOCTOR=1"
+            printf '%s\n' 'PHPSFX_WINDOWS_TAR=C:\Windows\System32\tar.exe'
           } >> "$GITHUB_ENV"
 
       - name: Prefer native Windows archive tools
