@@ -242,7 +242,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          "PATH=C:\Windows\System32;$env:PATH" >> $env:GITHUB_ENV
+          "Path=C:\Windows\System32;$env:Path" >> $env:GITHUB_ENV
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
