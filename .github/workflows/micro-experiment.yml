@@ -238,6 +238,12 @@ jobs:
             echo "PHPSFX_MICRO_SKIP_DOCTOR=1"
           } >> "$GITHUB_ENV"
 
+      - name: Prefer native Windows archive tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "PATH=C:\Windows\System32;$env:PATH" >> $env:GITHUB_ENV
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:

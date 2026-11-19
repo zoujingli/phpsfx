@@ -117,7 +117,7 @@ PHP 8.5 Linux x64 MySQL 代表包为 `35,972,872` bytes，日志中 `errors` 为
 
 在 macOS x86_64 扩展之后，实验 workflow 增加 Windows x86_64（`windows-x64`）的 `mysql`、`pgsql` 两种生产变体。PHP 8.4.27 与 8.5.12 各增加两个构建，单条 PHP 线由 10 个产物扩展为 12 个，汇总矩阵由 20 个扩展为 24 个。Windows 使用 static-php-cli 的 MSVC WindowsBuilder，产物保持 `windows.x64.<variant>.sfx` 命名并记录为 PE 可执行文件，拼接 Phar 时输出 `.exe`。
 
-Windows 不加入 Linux ODBC 的 `libodbc.so.2` 动态依赖合同，也不构建 ODBC 变体。当前 pinned static-php-cli 没有可用的 Windows `libcares` builder，Windows micro 构建移除该可选 Swoole DNS 依赖，使用系统解析，Linux/macOS 的 c-ares 配置不变。验证脚本在 Windows runner 上将 micro 探针和 Phar smoke 输出为 `.exe` 后执行，继续覆盖 PHP/Swoole、PDO、Phar 资源、INI 注入和 Hyperf 3.2 健康检查。由于 static-php-cli 的 `doctor` 在 Git Bash 下可能误判 Visual Studio 不存在，Windows workflow 跳过该提示性检查，实际 MSVC 构建仍由后续构建步骤验证。完整结果以新 workflow 运行记录为准，当前 `micro-v6.2.5.2` 和正式 `swoole-cli` 发布不变。
+Windows 不加入 Linux ODBC 的 `libodbc.so.2` 动态依赖合同，也不构建 ODBC 变体。当前 pinned static-php-cli 没有可用的 Windows `libcares` builder，Windows micro 构建移除该可选 Swoole DNS 依赖，使用系统解析，Linux/macOS 的 c-ares 配置不变。workflow 优先使用 Windows 系统 tar，避免 Git Bash 的 MinGW tar 临时目录问题。验证脚本在 Windows runner 上将 micro 探针和 Phar smoke 输出为 `.exe` 后执行，继续覆盖 PHP/Swoole、PDO、Phar 资源、INI 注入和 Hyperf 3.2 健康检查。由于 static-php-cli 的 `doctor` 在 Git Bash 下可能误判 Visual Studio 不存在，Windows workflow 跳过该提示性检查，实际 MSVC 构建仍由后续构建步骤验证。完整结果以新 workflow 运行记录为准，当前 `micro-v6.2.5.2` 和正式 `swoole-cli` 发布不变。
 
 ## 当前本地适配
 
