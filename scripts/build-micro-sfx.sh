@@ -178,6 +178,30 @@ if (file_put_contents($path, $json) === false) {
   echo 'Removed unsupported Windows Swoole libcares dependency; native DNS remains available' >&2
 }
 
+patch_windows_spc_paths() {
+  [[ "${PLATFORM}" == windows-* ]] || return 0
+  local filesystem_path="${SPC_DIR}/src/SPC/store/FileSystem.php"
+  python3 - "${filesystem_path}" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+needle = (
+    "    private static function extractArchive(string $filename, string $target): void\n"
+    "    {\n"
+)
+replacement = needle + (
+    "        $filename = self::convertPath($filename);\n"
+    "        $target = self::convertPath($target);\n"
+)
+if source.count(needle) != 1:
+    raise SystemExit("Unexpected static-php-cli extractArchive anchor")
+path.write_text(source.replace(needle, replacement, 1))
+PY
+  echo 'Normalized static-php-cli Windows archive paths' >&2
+}
+
 patch_dynamic_odbc_builder() {
   [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${MICRO_DYNAMIC_ODBC}" == 1 ]] || return 0
 
@@ -385,6 +409,7 @@ fi
 
 patch_dynamic_odbc_builder
 patch_windows_swoole_dependencies
+patch_windows_spc_paths
 
 if [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${PHP_VERSION}" == 8.5 ]]; then
   export PHPSFX_MICRO_UBSAN_LINK=1

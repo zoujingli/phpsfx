@@ -57,7 +57,7 @@ Linux ODBC 必须保留 `libodbc.so.2` 动态依赖。micro 的 PHP、Swoole 和
 
 构建变体由 `PHPSFX_DB_VARIANT` 选择：`mysql` 和 `pgsql` 是独立生产 PDO-only 试验包，Linux 另有 `odbc` 生产包；不再构建混合开发包。ODBC 包通过 `PHPSFX_SWOOLE_ODBC=1` 启用 Swoole 协程 ODBC，并要求 Linux 运行时动态依赖 `libodbc.so.2`。`PHPSFX_MICRO_DYNAMIC_ODBC=1` 默认只对 Linux ODBC 生效，使用 `x86_64-linux-gnu.2.17` 或 `aarch64-linux-gnu.2.17` 目标；macOS 和 Windows 不新增 ODBC 变体。`PHPSFX_MICRO_DISABLE_OPCACHE_JIT=1` 是默认值，关闭 dmskc2 不使用的 JIT 代码生成，但保留 OPcache 扩展本身。Windows 构建使用 static-php-cli 的 MSVC builder，生成 PE 格式 `micro.sfx`；拼接 Phar 时输出文件使用 `.exe` 后缀。
 
-Windows runner 的 static-php-cli `doctor` 检查在 Git Bash 环境下可能无法发现 runner 已安装的 Visual Studio，因此 workflow 在 Windows 只跳过该提示性检查，仍由实际构建器执行 MSVC 编译和链接。workflow 同时优先使用 Windows 系统 tar，避开 static-php-cli 文档指出的 MinGW tar 临时目录兼容问题。当前 pinned static-php-cli 没有可用的 Windows `libcares` builder，Windows 构建会移除该可选 Swoole DNS 依赖并使用系统解析；Linux/macOS 的 c-ares 配置不变。
+Windows runner 的 static-php-cli `doctor` 检查在 Git Bash 环境下可能无法发现 runner 已安装的 Visual Studio，因此 workflow 在 Windows 只跳过该提示性检查，仍由实际构建器执行 MSVC 编译和链接。workflow 同时优先使用 Windows 系统 tar，避开 static-php-cli 文档指出的 MinGW tar 临时目录兼容问题，并在 pinned checkout 内统一归档路径分隔符。当前 pinned static-php-cli 没有可用的 Windows `libcares` builder，Windows 构建会移除该可选 Swoole DNS 依赖并使用系统解析；Linux/macOS 的 c-ares 配置不变。
 
 最小运行流程如下：
 
