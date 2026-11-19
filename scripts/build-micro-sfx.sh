@@ -203,7 +203,11 @@ command = (
     """cmd()->execWithResult("\\"{$_7z}\\" x -so {$filename} | tar -f - -x -C \\"{$target}\\" --strip-components 1"),"""
 )
 replacement_command = (
-    """                'xz', 'txz', 'gz', 'tgz', 'bz2' => """
+    """                'xz', 'txz' => """
+    """cmd()->execWithResult("\\"" . """
+    """(getenv('PHPSFX_WINDOWS_TAR') ?: 'tar') . """
+    """ "\\" -xf \\"{$filename}\\" -C \\"{$target}\\" --strip-components 1"),"""
+    """                'gz', 'tgz', 'bz2' => """
     """cmd()->execWithResult("\\"{$_7z}\\" x -so {$filename} | \\"" . """
     """(getenv('PHPSFX_WINDOWS_TAR') ?: 'tar') . """
     """ "\\" -f - -x -C \\"{$target}\\" --strip-components 1"),"""
