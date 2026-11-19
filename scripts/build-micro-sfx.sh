@@ -116,12 +116,38 @@ append_extension() {
   esac
 }
 
+remove_extension() {
+  local remove_name=$1
+  local extension_list=$2
+  local extension
+  local filtered=
+  local first=1
+  local -a extensions=()
+  IFS=',' read -r -a extensions <<< "${extension_list}"
+  for extension in "${extensions[@]}"; do
+    [[ "${extension}" == "${remove_name}" ]] && continue
+    if [[ "${first}" == 1 ]]; then
+      filtered="${extension}"
+      first=0
+    else
+      filtered+=",${extension}"
+    fi
+  done
+  printf '%s' "${filtered}"
+}
+
 # Only the MySQL production variant carries mysqlnd and the Swoole MySQL hook;
 # the pgsql/odbc variants keep a strict single-PDO contract.
 case "${DISABLE_OPCACHE_JIT}" in
   0|1) ;;
   *) echo "PHPSFX_MICRO_DISABLE_OPCACHE_JIT must be 0 or 1" >&2; exit 2 ;;
 esac
+
+if [[ "${PLATFORM}" == windows-* ]]; then
+  # pcntl is unavailable on the native Windows builder. Keep the shared
+  # profile unchanged for Linux and macOS builds.
+  MICRO_EXTENSIONS=$(remove_extension pcntl "${MICRO_EXTENSIONS}")
+fi
 
 if [[ "${DB_VARIANT}" == mysql ]]; then
   append_extension swoole-hook-mysql
