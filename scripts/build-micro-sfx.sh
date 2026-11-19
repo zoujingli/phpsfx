@@ -144,9 +144,11 @@ case "${DISABLE_OPCACHE_JIT}" in
 esac
 
 if [[ "${PLATFORM}" == windows-* ]]; then
-  # pcntl is unavailable on the native Windows builder. Keep the shared
-  # profile unchanged for Linux and macOS builds.
-  MICRO_EXTENSIONS=$(remove_extension pcntl "${MICRO_EXTENSIONS}")
+  # pcntl and posix are unavailable on the native Windows builder. Keep the
+  # shared profile unchanged for Linux and macOS builds.
+  for unsupported_extension in pcntl posix; do
+    MICRO_EXTENSIONS=$(remove_extension "${unsupported_extension}" "${MICRO_EXTENSIONS}")
+  done
 fi
 
 if [[ "${DB_VARIANT}" == mysql ]]; then
