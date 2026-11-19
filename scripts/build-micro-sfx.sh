@@ -156,6 +156,28 @@ if (file_put_contents($path, $json) === false) {
   echo 'Trimmed native PDO dependencies and selected static pkg-config for pdo_pgsql' >&2
 }
 
+patch_windows_swoole_dependencies() {
+  [[ "${PLATFORM}" == windows-* ]] || return 0
+  local config_path="${SPC_DIR}/config/ext.json"
+  php -r '
+$path = $argv[1];
+$data = json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+if (!isset($data["swoole"]) || !is_array($data["swoole"])) {
+    throw new RuntimeException("Missing Swoole extension configuration");
+}
+foreach (["lib-depends", "lib-depends-windows"] as $key) {
+    if (isset($data["swoole"][$key]) && is_array($data["swoole"][$key])) {
+        $data["swoole"][$key] = array_values(array_diff($data["swoole"][$key], ["libcares"]));
+    }
+}
+$json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+if (file_put_contents($path, $json) === false) {
+    throw new RuntimeException("Unable to write {$path}");
+}
+' "${config_path}"
+  echo 'Removed unsupported Windows Swoole libcares dependency; native DNS remains available' >&2
+}
+
 patch_dynamic_odbc_builder() {
   [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${MICRO_DYNAMIC_ODBC}" == 1 ]] || return 0
 
@@ -362,6 +384,7 @@ if [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${MICRO_DYNAMIC_OD
 fi
 
 patch_dynamic_odbc_builder
+patch_windows_swoole_dependencies
 
 if [[ "${DB_VARIANT}" == odbc && "${PLATFORM}" == linux-* && "${PHP_VERSION}" == 8.5 ]]; then
   export PHPSFX_MICRO_UBSAN_LINK=1
