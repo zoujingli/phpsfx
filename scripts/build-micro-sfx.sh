@@ -186,7 +186,7 @@ from pathlib import Path
 import sys
 
 path = Path(sys.argv[1])
-source = path.read_text()
+source = path.read_text(encoding="utf-8")
 needle = (
     "    private static function extractArchive(string $filename, string $target): void\n"
     "    {\n"
@@ -197,7 +197,7 @@ replacement = needle + (
 )
 if source.count(needle) != 1:
     raise SystemExit("Unexpected static-php-cli extractArchive anchor")
-path.write_text(source.replace(needle, replacement, 1))
+path.write_text(source.replace(needle, replacement, 1), encoding="utf-8")
 PY
   echo 'Normalized static-php-cli Windows archive paths' >&2
 }
