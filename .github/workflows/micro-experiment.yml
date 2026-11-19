@@ -232,8 +232,11 @@ jobs:
         run: |
           set -eu
           workspace_native=$(pwd -W 2>/dev/null || cygpath -w "$(pwd)")
-          echo "PHPSFX_MICRO_SPC_DIR=${workspace_native}/.build/static-php-cli-micro-${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}" >> "$GITHUB_ENV"
-          echo "PHPSFX_DIST_DIR=${workspace_native}/dist/micro-${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}" >> "$GITHUB_ENV"
+          {
+            echo "PHPSFX_MICRO_SPC_DIR=${workspace_native}/.build/static-php-cli-micro-${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}"
+            echo "PHPSFX_DIST_DIR=${workspace_native}/dist/micro-${PHPSFX_PHP_VERSION}-${PHPSFX_PLATFORM}-${PHPSFX_DB_VARIANT}"
+            echo "PHPSFX_MICRO_SKIP_DOCTOR=1"
+          } >> "$GITHUB_ENV"
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
